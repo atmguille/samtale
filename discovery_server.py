@@ -30,7 +30,7 @@ def _send(message: bytes) -> str:
         connection.send(message)
         response = connection.recv(BUFFER_SIZE)
         connection.send("QUIT".encode())  # TODO: esto va aquí o no?
-    return str(response)
+    return response.decode()
 
 
 def register(user: User, password: str):  # TODO: incluir password en User si se necesita en otros sitios
@@ -58,16 +58,22 @@ def get_user(nick: str) -> User:
     if response[0] == "NOK":
         raise UserUnknown(nick)
     else:
-        return User(nick, ip=response[2], tcp_port=int(response[3]), protocols=response[4])
+        return User(nick, ip=response[3], tcp_port=int(response[4]), protocols=response[5])
 
 
-def list_users() -> List[User]:
+def list_users() -> List[User]:  # TODO: de verdad esto puede devolver NOK? TODO: devuelve ts en vez de protocols: PROTESTAR
     """
     Gets a list of all the users
     :return: list of users.
     """
-    return [User(nick=response[0], ip=response[1], tcp_port=int(response[2]), protocols=response[3])
-            for response in (_send("LIST_USERS".encode()).split()[2]).split('#')]  # TODO: de verdad esto puede devolver NOK?
+    """Response contains something like OK USERS_LIST N_USERS user1#... So to get the actual list of users, 
+        we look for N_USERS and start splitting the list from there. Afterwards, we get a list with all the info
+        of each user in a string (users_str), so we need to split again each user to get a list of the needed values"""
 
+    response = _send("LIST_USERS".encode())
+    n_users = response.split()[2]
+    start_index = response.find(n_users) + len(n_users) + 1  # The number itself and the white space
+    users_str = response[start_index:].split('#')[:-1]  # Avoid final empty element
+    users_splitted = [user.split() for user in users_str]
 
-print(register(User("dani", "V0", 8080), "secret"))
+    return [User(nick=user[0], ip=user[1], tcp_port=int(user[2]), protocols=user[3]) for user in users_splitted]
