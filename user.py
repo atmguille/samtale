@@ -9,7 +9,7 @@ def _get_public_ip():  # TODO
 
 
 class User:
-    def __init__(self, nick: str, tcp_port: int, udp_port: int = None, ip: str = None):
+    def __init__(self, nick: str, protocols: str, tcp_port: int, ip: str = None, udp_port: int = None):
         """
         Constructor
         :param nick
@@ -18,6 +18,7 @@ class User:
         :param ip: if not specified, own public IP will be set
         """
         self.nick = nick
+        self.protocols = protocols
         self.ip = ip if ip is not None else _get_public_ip()
         self.tcp_port = tcp_port
         self.udp_port = udp_port
