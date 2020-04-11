@@ -28,6 +28,7 @@ def _send(message: bytes) -> str:
         connection.connect((socket.gethostbyname(server_hostname), server_port))
         connection.send(message)
         response = connection.recv(BUFFER_SIZE)
+        connection.send("QUIT".encode())  # TODO: esto va aquí o no?
     return str(response)
 
 
