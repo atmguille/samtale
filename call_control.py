@@ -38,6 +38,7 @@ class CallControl:
     def __del__(self):
         self.connection.close()
 
+    # TODO: funciones para usar con with, quitar si no usamos
     def __enter__(self):
         return self
 
@@ -51,7 +52,7 @@ class CallControl:
         """
         string_to_send = f"CALLING {self.src_user.nick} {self.src_user.tcp_port}"
         self.connection.send(string_to_send.encode())
-        response = str(self.connection.recv(BUFFER_SIZE)).split()
+        response = self.connection.recv(BUFFER_SIZE).decode().split()
         if response[0] == "CALL_DENIED":
             raise CallDenied(self.dst_user.nick)
         elif response[0] == "CALL_BUSY":
