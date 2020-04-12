@@ -1,87 +1,58 @@
-# import the library
-from appJar import gui
-from PIL import Image, ImageTk
-import numpy as np
+import socket
 import cv2
+from PIL import Image, ImageTk
+from appJar import gui
 
 
 class VideoClient(object):
+    VIDEO_WIDGET_NAME = "video"
 
     def __init__(self, window_size):
+        self.gui = gui("Skype", window_size)
+        self.gui.setGuiPadding(5)
 
-        # Creamos una variable que contenga el GUI principal
-        self.app = gui("Redes2 - P2P", window_size)
-        self.app.setGuiPadding(10, 10)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        # Preparación del interfaz
-        self.app.addLabel("title", "Cliente Multimedia P2P - Redes2 ")
-        self.app.addImage("video", "imgs/webcam.gif")
-
-        # Registramos la función de captura de video
-        # Esta misma función también sirve para enviar un vídeo
-        self.cap = cv2.VideoCapture(0)
-        self.app.setPollTime(20)
-        self.app.registerEvent(self.capturaVideo)
-
-        # Añadir los botones
-        self.app.addButtons(["Conectar", "Colgar", "Salir"], self.buttonsCallback)
-
-        # Barra de estado
-        # Debe actualizarse con información útil sobre la llamada (duración, FPS, etc...)
-        self.app.addStatusbar(fields=2)
+        self.capture = cv2.VideoCapture(0)
+        if not self.capture.isOpened():
+            raise Exception("No camera detected")
+        self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME, VideoClient.get_image(self.get_frame()), fmt="PhotoImage")
+        self.gui.setPollTime(20)
+        self.gui.registerEvent(self.f)
 
     def start(self):
-        self.app.go()
+        self.gui.go()
 
-    # Función que captura el frame a mostrar en cada momento
-    def capturaVideo(self):
+    def get_frame(self):
+        success, frame = self.capture.read()
+        if not success:
+            raise Exception("Couldn't read from webcam")
+        frame = cv2.flip(frame, 1)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        return frame
 
-        # Capturamos un frame de la cámara o del vídeo
-        ret, frame = self.cap.read()
-        frame = cv2.resize(frame, (640, 480))
-        cv2_im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img_tk = ImageTk.PhotoImage(Image.fromarray(cv2_im))
+    @staticmethod
+    def get_image(frame):
+        return ImageTk.PhotoImage(Image.fromarray(frame))
 
-        # Lo mostramos en el GUI
-        self.app.setImageData("video", img_tk, fmt='PhotoImage')
+    def show_video(self, frame):
+        self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
-    # Aquí tendría que el código que envia el frame a la red
-    # ...
+    def f(self):
+        frame = self.get_frame()
+        self.show_video(frame)
+        # Compress image to send it via the socket
+        success, compressed_frame = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+        if not success:
+            raise Exception("Error compressing the image")
+        compressed_frame = compressed_frame.tobytes()
+        # TODO: check that len(compressed_frame) <= 65_507 - cabecera
 
-    # Establece la resolución de la imagen capturada
-    def setImageResolution(self, resolution):
-        # Se establece la resolución de captura de la webcam
-        # Puede añadirse algún valor superior si la cámara lo permite
-        # pero no modificar estos
-        if resolution == "LOW":
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 160)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 120)
-        elif resolution == "MEDIUM":
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-        elif resolution == "HIGH":
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-    # Función que gestiona los callbacks de los botones
-    def buttonsCallback(self, button):
-        if button == "Salir":
-            # Salimos de la aplicación
-            self.app.stop()
-        elif button == "Conectar":
-            # Entrada del nick del usuario a conectar
-            nick = self.app.textBox("Conexión",
-                                    "Introduce el nick del usuario a buscar")
+        bytes_sent = self.sock.sendto(compressed_frame, ("127.0.0.1", 1234))
+        print(f"Sent {bytes_sent} bytes")
 
 
 if __name__ == '__main__':
     vc = VideoClient("640x520")
 
-    # Crear aquí los threads de lectura, de recepción y,
-    # en general, todo el código de inicialización que sea necesario
-    # ...
-
-    # Lanza el bucle principal del GUI
-    # El control ya NO vuelve de esta función, por lo que todas las
-    # acciones deberán ser gestionadas desde callbacks y threads
     vc.start()
