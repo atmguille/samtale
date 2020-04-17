@@ -48,8 +48,8 @@ class VideoClient(object):
         compressed_frame = compressed_frame.tobytes()
         # TODO: check that len(compressed_frame) <= 65_507 - cabecera
 
-        bytes_sent = self.sock.sendto(compressed_frame, ("127.0.0.1", 1234))
-        print(f"Sent {bytes_sent} bytes")
+        bytes_sent = self.sock.sendto(compressed_frame, ("95.120.76.179", 1234))
+        # print(f"Sent {bytes_sent} bytes")
 
 
 if __name__ == '__main__':

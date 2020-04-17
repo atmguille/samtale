@@ -7,7 +7,7 @@ from appJar import gui
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 gui = gui("Receiver", "640x520")
-sock.bind(("127.0.0.1", 1234))
+sock.bind(("0.0.0.0", 1234))
 
 
 def f():
