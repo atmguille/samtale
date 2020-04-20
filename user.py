@@ -1,5 +1,7 @@
 import requests
 
+currentUser = None
+
 
 def _get_public_ip():  # TODO
     """
@@ -25,3 +27,12 @@ class User:
 
     def update_udp_port(self, port: int):
         self.udp_port = port
+
+
+class CurrentUser(User):
+    currentUser = None  # TODO
+
+    def __init__(self, nick: str, tcp_port: int, password: str, udp_port: int = None, ip: str = None):
+        super().__init__(nick, tcp_port, udp_port, ip)
+        self.password = password
+        CurrentUser.currentUser = self

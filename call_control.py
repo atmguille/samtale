@@ -1,5 +1,6 @@
 import socket
-from user import User
+import threading
+from user import User, CurrentUser
 
 BUFFER_SIZE = 50  # TODO: espero que nadie tenga un nick demasiado largo
 
@@ -29,38 +30,52 @@ def _create_tcp_connection(dst_user: User) -> socket:
 
 
 class CallControl:
-    def __init__(self, src_user: User, dst_user: User):
-        self.src_user = src_user
+    def __init__(self, dst_user: User):
+        self.src_user = CurrentUser.currentUser
         self.dst_user = dst_user
         self.connection = _create_tcp_connection(dst_user)
-        # TODO: thread listener que se pare en un recv y vaya lanzando excepciones...?
+        self._in_call = False
+        self._listener = threading.Thread(target=self._listen)  # TODO: primera solución que se me ocurre, para nada definitiva
 
     def __del__(self):
         self.connection.close()
 
+    # TODO: funciones para usar con with, quitar si no usamos
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.__del__()
 
-    def call_start(self):
-        """
-        Let the other user we are calling him. If he accepts, user.udp_port will be updated
-        :raises: CallDenied or CallBusy
-        """
-        string_to_send = f"CALLING {self.src_user.nick} {self.src_user.tcp_port}"
-        self.connection.send(string_to_send.encode())
-        response = str(self.connection.recv(BUFFER_SIZE)).split()
-        if response[0] == "CALL_DENIED":
-            raise CallDenied(self.dst_user.nick)
+    def _listen(self):
+        # TODO: informar a la interfaz de lo que va pasando
+        response = self.connection.recv(BUFFER_SIZE).decode().split()
+        if response[0] == "CALLING":
+            if self._in_call:
+                self.call_busy()
+            else:
+                pass
+        elif response[0] == "CALL_ACCEPTED":
+            self._in_call = True
+            self.dst_user.update_udp_port(int(response[2]))
+        elif response[0] == "CALL_DENIED":
+            raise CallDenied(self.dst_user.nick) # TODO: tanto esta como la siguiente excepcion posiblemente no tengan senitdo. Hay que ver como informar a la interfaz
         elif response[0] == "CALL_BUSY":
             raise CallBusy(self.dst_user.nick)
-        else:
-            self.dst_user.update_udp_port(int(response[2]))
+        elif response[0] == "CALL_HOLD":
+            self._in_call = False
+        elif response[0] == "CALL_RESUME":
+            self._in_call = True
+        elif response[0] == "CALL_END":
+            self._in_call = False
+
+    def call_start(self):
+        string_to_send = f"CALLING {self.src_user.nick} {self.src_user.tcp_port}"
+        self.connection.send(string_to_send.encode())
 
     def call_accept(self):
         string_to_send = f"CALL_ACCEPTED {self.src_user.nick} {self.src_user.udp_port}"
+        self._in_call = True
         self.connection.send(string_to_send.encode())
 
     def call_deny(self):
@@ -73,13 +88,16 @@ class CallControl:
 
     def call_hold(self):
         string_to_send = f"CALL_HOLD {self.src_user.nick}"
+        self._in_call = False
         self.connection.send(string_to_send.encode())
 
     def call_resume(self):
         string_to_send = f"CALL_RESUME {self.src_user.nick}"
+        self._in_call = True
         self.connection.send(string_to_send.encode())
 
     def call_end(self):
         string_to_send = f"CALL_END {self.src_user.nick}"
+        self._in_call = False
         self.connection.send(string_to_send.encode())
 
