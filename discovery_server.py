@@ -1,6 +1,6 @@
 import socket
 from typing import List
-from user import User
+from user import User, CurrentUser
 
 BUFFER_SIZE = 1024  # TODO: ajustar más si se quiere
 server_hostname = 'tfg.eps.uam.es'
@@ -33,14 +33,13 @@ def _send(message: bytes) -> str:
     return response.decode()
 
 
-def register(user: User, password: str):  # TODO: incluir password en User si se necesita en otros sitios
+def register(user: CurrentUser):
     """
-    Registers the user in the system with the specified parameters
+    Registers the current user in the system with the specified parameters
     :param user
-    :param password
     :raise RegisterFailed
     """
-    string_to_send = f"REGISTER {user.nick} {user.ip} {user.tcp_port} {password} {user.protocols}"
+    string_to_send = f"REGISTER {user.nick} {user.ip} {user.tcp_port} {user.password} {user.protocols}"
     response = _send(string_to_send.encode()).split()
     if response[0] == "NOK":
         raise RegisterFailed
