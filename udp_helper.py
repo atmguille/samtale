@@ -29,8 +29,8 @@ class UDPDatagram:
         return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#".encode() + self.data
 
 
-def udp_datagram_from_msg(message: str) -> UDPDatagram:
-    fields = message.split('#')
+def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
+    fields = message.decode().split('#')
     return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2],
                        fps=float(fields[3]), data=fields[4].encode())
 
