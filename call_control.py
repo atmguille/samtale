@@ -39,6 +39,7 @@ class CallControl:
 
     def __del__(self):
         self.connection.close()
+        self._listener.stop()
 
     # TODO: funciones para usar con with, quitar si no usamos
     def __enter__(self):
@@ -49,25 +50,26 @@ class CallControl:
 
     def _listen(self):
         # TODO: informar a la interfaz de lo que va pasando
-        response = self.connection.recv(BUFFER_SIZE).decode().split()
-        if response[0] == "CALLING":
-            if self._in_call:
-                self.call_busy()
-            else:
-                pass
-        elif response[0] == "CALL_ACCEPTED":
-            self._in_call = True
-            self.dst_user.update_udp_port(int(response[2]))
-        elif response[0] == "CALL_DENIED":
-            raise CallDenied(self.dst_user.nick) # TODO: tanto esta como la siguiente excepcion posiblemente no tengan senitdo. Hay que ver como informar a la interfaz
-        elif response[0] == "CALL_BUSY":
-            raise CallBusy(self.dst_user.nick)
-        elif response[0] == "CALL_HOLD":
-            self._in_call = False
-        elif response[0] == "CALL_RESUME":
-            self._in_call = True
-        elif response[0] == "CALL_END":
-            self._in_call = False
+        while 1:
+            response = self.connection.recv(BUFFER_SIZE).decode().split()
+            if response[0] == "CALLING":
+                if self._in_call:
+                    self.call_busy()
+                else:
+                    pass
+            elif response[0] == "CALL_ACCEPTED":
+                self._in_call = True
+                self.dst_user.update_udp_port(int(response[2]))
+            elif response[0] == "CALL_DENIED":
+                raise CallDenied(self.dst_user.nick) # TODO: tanto esta como la siguiente excepcion posiblemente no tengan senitdo. Hay que ver como informar a la interfaz
+            elif response[0] == "CALL_BUSY":
+                raise CallBusy(self.dst_user.nick)
+            elif response[0] == "CALL_HOLD":
+                self._in_call = False
+            elif response[0] == "CALL_RESUME":
+                self._in_call = True
+            elif response[0] == "CALL_END":
+                self._in_call = False
 
     def call_start(self):
         string_to_send = f"CALLING {self.src_user.nick} {self.src_user.tcp_port}"
