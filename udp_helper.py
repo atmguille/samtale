@@ -23,7 +23,10 @@ class UDPDatagram:
         self.delay_ts = self.received_ts - self.sent_ts
 
     def __str__(self):
-        return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#{self.data}"
+        return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#" + self.data.decode()
+
+    def encode(self) -> bytes:
+        return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#".encode() + self.data
 
 
 def udp_datagram_from_msg(message: str) -> UDPDatagram:
