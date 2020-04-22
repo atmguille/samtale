@@ -72,7 +72,7 @@ class VideoClient(object):
 
         # Display local (and remote) frame(s)
         local_frame = self.get_frame()
-        if remote_frame:
+        if remote_frame is not None:
             margin = 10
             mini_frame_width = self.video_width // 4
             mini_frame_height = self.video_height // 4
