@@ -66,6 +66,7 @@ class VideoClient(object):
         try:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
             remote_frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
+            self.remote_ip = addr[0]
         except BlockingIOError:
             # No one has sent us data yet
             pass
