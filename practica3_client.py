@@ -1,18 +1,31 @@
 import socket
 from ipaddress import IPv4Network
+from threading import Thread
 
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
 from appJar import gui
 
+from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
+
 PORT = 1234
 MAX_DATAGRAM_SIZE = 65_507
+POLLING_TIME = 20
 
 
 class VideoClient(object):
     VIDEO_WIDGET_NAME = "video"
     CONNECT_BUTTON = "Connect"
+
+    def receive_video(self):
+        # TODO: how to kill
+        while True:
+            data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
+            remote_frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
+            self.remote_ip = addr[0]
+            udp_datagram = udp_datagram_from_msg(remote_frame)
+            self.udp_buffer.insert(udp_datagram)
 
     def __init__(self, window_size):
         self.gui = gui("Skype", window_size)
@@ -21,7 +34,6 @@ class VideoClient(object):
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.receive_socket.bind(("0.0.0.0", PORT))
-        self.receive_socket.setblocking(False)
 
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
@@ -36,11 +48,14 @@ class VideoClient(object):
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback)
 
         # Register repeating function
-        self.gui.setPollTime(20)
+        self.gui.setPollTime(POLLING_TIME)
         self.gui.registerEvent(self.repeating_function)
 
         # Initialize variables
         self.remote_ip = None
+        self.thread = Thread(target=self.receive_video, daemon=True)
+        self.udp_buffer = UDPBuffer()
+        self.sequence_number = 0
 
     def start(self):
         self.gui.go()
@@ -61,15 +76,7 @@ class VideoClient(object):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
     def repeating_function(self):
-        remote_frame = None
-        # Get video stream from socket
-        try:
-            data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            remote_frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
-            self.remote_ip = addr[0]
-        except BlockingIOError:
-            # No one has sent us data yet
-            pass
+        remote_frame, _ = self.udp_buffer.consume(1)
 
         # Display local (and remote) frame(s)
         local_frame = self.get_frame()
@@ -89,10 +96,15 @@ class VideoClient(object):
             if not success:
                 raise Exception("Error compressing the image")
             compressed_local_frame = compressed_local_frame.tobytes()
-            # TODO: check that len(compressed_frame) <= 65_507 - cabecera
+            udp_datagram = UDPDatagram(self.sequence_number,
+                                       f"{self.video_width}x{self.video_height}",
+                                       1000 // POLLING_TIME,
+                                       compressed_local_frame)
+            # TODO: check that len(upp_datagram.encode()) <= 65_507
 
-            bytes_sent = self.send_socket.sendto(compressed_local_frame, (self.remote_ip, 1234))
+            bytes_sent = self.send_socket.sendto(udp_datagram.encode(), (self.remote_ip, 1234))
             # print(f"Sent {bytes_sent} bytes")
+            self.sequence_number += 1
 
     def buttons_callback(self, name: str):
         if name == VideoClient.CONNECT_BUTTON:
