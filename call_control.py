@@ -25,6 +25,7 @@ class ControlDispatcher:
         self.src_user = CurrentUser.currentUser
         self.sock = _open_tcp_socket(self.src_user)
         self._listener = threading.Thread(target=self._listen)
+        self._listener.start()
         self.__listener_stop = False
 
     def __del__(self):
@@ -92,7 +93,7 @@ class CallControl:
         self.src_user = CurrentUser.currentUser
         self.dst_user = dst_user
         self.connection = connection if connection is not None else _create_tcp_connection(dst_user)
-        self._listener = None
+        self._listener = threading.Thread(target=self._listen)
         self.__listener_stop = False
         # These two variables are needed in case both of the users hold the call.
         # Only if both of them are not in "hold", the call can continue
@@ -102,8 +103,7 @@ class CallControl:
     def __del__(self):
         self.connection.close()
         self.__listener_stop = True
-        if self._listener:
-            self._listener.join()
+        self._listener.join()
 
     # TODO: funciones para usar con with, quitar si no usamos
     def __enter__(self):
@@ -147,7 +147,7 @@ class CallControl:
         if response[0] == "CALL_ACCEPTED":
             self.dst_user.update_udp_port(int(response[2]))
             self.connection.settimeout(None)  # The connection should not be closed until wanted
-            self._listener = threading.Thread(target=self._listen)
+            self._listener.start()
         elif response[0] == "CALL_DENIED":
             with _in_call_mutex:
                 _user_in_call = False
@@ -167,7 +167,7 @@ class CallControl:
             _user_in_call = True
         string_to_send = f"CALL_ACCEPTED {self.src_user.nick} {self.src_user.udp_port}"
         self.connection.send(string_to_send.encode())
-        self._listener = threading.Thread(target=self._listen)
+        self._listener.start()
 
     def call_deny(self):
         string_to_send = f"CALL_DENIED {self.src_user.nick}"
