@@ -67,7 +67,7 @@ class UDPBuffer:
                     self._buffer = self._buffer[:i] + [datagram] + self._buffer[i:]
                     break
 
-    def consume(self, n_slots: int = 40) -> Tuple[List[UDPDatagram], BufferQuality]:
+    def consume(self, n_slots: int = 40) -> Tuple[List[bytes], BufferQuality]:
         """
         Gets n_slots from the buffer
         :param n_slots:
@@ -97,4 +97,6 @@ class UDPBuffer:
         else:
             quality = BufferQuality.LOW
 
-        return consumed_buffer, quality
+        consumed_data = [datagram.data for datagram in consumed_buffer]
+
+        return consumed_data, quality
