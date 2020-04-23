@@ -30,9 +30,17 @@ class UDPDatagram:
 
 
 def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
-    fields = message.decode().split('#')
-    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2],
-                       fps=float(fields[3]), data=fields[4].encode())
+    # TODO: improve this code
+    count = 0
+    for index, c in enumerate(map(chr, message)):
+        if c == '#':
+            count += 1
+        if count == 4:
+            fields = message[:index].decode().split('#')
+            data = message[index + 1:]
+            break
+
+    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2], fps=float(fields[3]), data=data)
 
 
 class BufferQuality(Enum):
@@ -62,10 +70,12 @@ class UDPBuffer:
             return
 
         with self.__mutex:
-            for i in range(len(self._buffer), -1, -1):
+            for i in range(len(self._buffer) - 1, -1, -1):
                 if self._buffer[i].seq_number < datagram.seq_number:
                     self._buffer = self._buffer[:i] + [datagram] + self._buffer[i:]
                     break
+            if len(self._buffer) == 0:
+                self._buffer.append(datagram)
 
     def consume(self, n_slots: int = 40) -> Tuple[List[bytes], BufferQuality]:
         """

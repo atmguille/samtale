@@ -22,9 +22,9 @@ class VideoClient(object):
         # TODO: how to kill
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            remote_frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
+            # remote_frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
             self.remote_ip = addr[0]
-            udp_datagram = udp_datagram_from_msg(remote_frame)
+            udp_datagram = udp_datagram_from_msg(data)
             self.udp_buffer.insert(udp_datagram)
 
     def __init__(self, window_size):
@@ -55,6 +55,7 @@ class VideoClient(object):
         self.remote_ip = None
         self.thread = Thread(target=self.receive_video, daemon=True)
         self.udp_buffer = UDPBuffer()
+        self.thread.start()
         self.sequence_number = 0
 
     def start(self):
@@ -76,11 +77,15 @@ class VideoClient(object):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
     def repeating_function(self):
+        # remote_frame, _ = self.udp_buffer.consume(1)
         remote_frame, _ = self.udp_buffer.consume(1)
-
+        if remote_frame:
+            remote_frame = cv2.imdecode(np.frombuffer(remote_frame[0], np.uint8), 1)
+        else:
+            remote_frame = None
         # Display local (and remote) frame(s)
         local_frame = self.get_frame()
-        if remote_frame:
+        if remote_frame is not None:
             margin = 10
             mini_frame_width = self.video_width // 4
             mini_frame_height = self.video_height // 4
