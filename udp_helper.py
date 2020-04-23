@@ -30,14 +30,14 @@ class UDPDatagram:
 
 
 def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
-    fields = message.decode().split('#')
-    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2],
-                       fps=float(fields[3]), data=fields[4].encode())
+    fields = message.split(b'#')
+    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2].decode(),
+                       fps=float(fields[3]), data=fields[4])
 
 
 class BufferQuality(Enum):
     """
-    Enum with the different types of quality (depending on datagrams lost, delays...)
+    Enum with the different types of quality (depending on packages lost, delays...)
     """
     SUPER_LOW = auto()
     LOW = auto()
@@ -50,6 +50,9 @@ class UDPBuffer:
         self._buffer = []
         self.__last_seq_number = -1
         self.__mutex = Lock()
+        self._buffer_quality = BufferQuality.SUPER_LOW
+        self.__packages_lost = 0
+        self.__delay_sum = 0
 
     def insert(self, datagram: UDPDatagram):
         """
@@ -57,46 +60,63 @@ class UDPBuffer:
         :param datagram
         """
         datagram.set_received_time(time.time())
-        # If datagram should have already been consumed, discard it
-        if datagram.seq_number < self.__last_seq_number:
-            return
 
         with self.__mutex:
-            for i in range(len(self._buffer), -1, -1):
+            # If datagram should have already been consumed, discard it
+            if datagram.seq_number < self.__last_seq_number:
+                return
+
+            buffer_len = len(self._buffer)
+
+            # If buffer is currently empty
+            if buffer_len == 0:
+                self._buffer.append(datagram)
+                self.__delay_sum += datagram.delay_ts
+                self._buffer_quality = BufferQuality.LOW
+                return
+            # If datagram should be the first element
+            if self._buffer[0].seq_number > datagram.seq_number:
+                self._buffer.insert(0, datagram)
+                self.__delay_sum += datagram.delay_ts
+                return
+
+            for i in range(buffer_len - 1, -1, -1):
                 if self._buffer[i].seq_number < datagram.seq_number:
-                    self._buffer = self._buffer[:i] + [datagram] + self._buffer[i:]
+                    if i+1 < buffer_len:
+                        self.__packages_lost -= 1  # Since package is inserted in the middle, there is one less lost
+                    else:
+                        self.__packages_lost += datagram.seq_number - self._buffer[i].seq_number - 1
+
+                    self.__delay_sum += datagram.delay_ts
+                    self._buffer.insert(i+1, datagram)
+                    # Recompute buffer_quality
+                    score = self.__packages_lost + 10 * (self.__delay_sum / (buffer_len+1))
+                    if score < 10:
+                        self._buffer_quality = BufferQuality.HIGH
+                    elif score < 100:
+                        self._buffer_quality = BufferQuality.MEDIUM
+                    else:
+                        self._buffer_quality = BufferQuality.LOW
                     break
 
-    def consume(self, n_slots: int = 40) -> Tuple[List[bytes], BufferQuality]:
+    def consume(self) -> Tuple[bytes, BufferQuality]:
         """
-        Gets n_slots from the buffer
-        :param n_slots:
-        :return: If there are not enough slots, it returns an empty list and quality SUPER_LOW. If there are enough,
-                 it returns the slots and their quality
+        Consumes first datagram of the buffer, returning its data and the current buffer quality
+        :return: consumed_datagram.data, quality
         """
         with self.__mutex:
-            if len(self._buffer) < n_slots:
-                return [], BufferQuality.SUPER_LOW
-            consumed_buffer = self._buffer[:n_slots]
-            self._buffer = self._buffer[n_slots:]
+            quality = self._buffer_quality
 
-        self.__last_seq_number = consumed_buffer[-1].seq_number
-        # Determine buffer quality
-        datagrams_lost = 0
-        delays_sum = 0
-        for i in range(n_slots):
-            if i+1 < n_slots:
-                datagrams_lost += consumed_buffer[i+1].seq_number - consumed_buffer[i].seq_number
-            delays_sum = consumed_buffer[i].delay_ts
+            if not self._buffer:
+                return bytes(), quality
 
-        quality_avg = 10 * (datagrams_lost / (n_slots * 2)) + 1000 * (delays_sum / n_slots)  # TODO: pesos
-        if quality_avg < 10:  # TODO: rangos
-            quality = BufferQuality.HIGH
-        elif quality_avg < 1000:
-            quality = BufferQuality.MEDIUM
-        else:
-            quality = BufferQuality.LOW
+            consumed_datagram = self._buffer.pop(0)
+            self.__last_seq_number = consumed_datagram.seq_number
+            self.__delay_sum -= consumed_datagram.delay_ts
 
-        consumed_data = [datagram.data for datagram in consumed_buffer]
+            if len(self._buffer) == 0:
+                self._buffer_quality = BufferQuality.SUPER_LOW
+            else:
+                self.__packages_lost -= self._buffer[0].seq_number - consumed_datagram.seq_number - 1
 
-        return consumed_data, quality
+        return consumed_datagram.data, quality
