@@ -77,6 +77,7 @@ class VideoClient(object):
     def show_video(self, frame):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
+    @timer
     def repeating_function(self):
         # Fetch webcam frame
         local_frame = self.get_frame()
