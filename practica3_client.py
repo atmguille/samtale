@@ -22,11 +22,10 @@ class VideoClient(object):
     def receive_video(self):
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            # remote_frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
             self.remote_ip = addr[0]
             udp_datagram = udp_datagram_from_msg(data)
-            self.udp_buffer.insert(udp_datagram)
-            self.semaphore.release()
+            if self.udp_buffer.insert(udp_datagram):  # Release semaphore only is data was really inserted
+                self.semaphore.release()
 
     def capture_and_send_video(self):
         sequence_number = 0
@@ -50,7 +49,6 @@ class VideoClient(object):
                 assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
 
                 self.send_socket.sendto(udp_datagram, (self.remote_ip, 1234))
-                # print(f"Sent {bytes_sent} bytes")
                 sequence_number += 1
 
     def __init__(self, window_size):
@@ -117,11 +115,11 @@ class VideoClient(object):
             except queue.Empty:
                 local_frame = self.last_local_frame
             # Fetch remote frame
-            remote_frame, remaining = self.udp_buffer.consume()
+            remote_frame, quality = self.udp_buffer.consume()
             if not remote_frame:
                 remote_frame = last_remote_frame
             # Show local (and remote) frame
-            if remote_frame:
+            if remote_frame:  # TODO: esto ya no tiene sentido no? Siempre debería ser True
                 last_remote_frame = remote_frame
                 remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
                 margin = 10
