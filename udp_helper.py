@@ -69,6 +69,7 @@ class UDPBuffer:
         Inserts the specified datagram in the buffer, preserving the order. It discards the datagram if it's too old
         :param datagram
         """
+        # TODO: Return if datagram was inserted or not
         datagram.set_received_time(time.time())
 
         with self.__mutex:

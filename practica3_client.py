@@ -1,18 +1,18 @@
+import queue
 import socket
 from ipaddress import IPv4Network
-from threading import Thread
+from queue import Queue
+from threading import Thread, Semaphore, Lock
 
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
 from appJar import gui
 
-from decorators import notify_timeout
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 PORT = 1234
 MAX_DATAGRAM_SIZE = 65_507
-POLL_TIME = 40
 
 
 class VideoClient(object):
@@ -20,13 +20,38 @@ class VideoClient(object):
     CONNECT_BUTTON = "Connect"
 
     def receive_video(self):
-        # TODO: how to kill
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
             # remote_frame = cv2.imdecode(np.frombuffer(data, np.uint8), 1)
             self.remote_ip = addr[0]
             udp_datagram = udp_datagram_from_msg(data)
             self.udp_buffer.insert(udp_datagram)
+            self.lock.release()
+
+    def capture_and_send_video(self):
+        sequence_number = 0
+        while True:
+            # Fetch webcam frame
+            local_frame = self.get_frame()
+            # Notify visualization thread
+            self.camera_buffer.put(local_frame)
+            self.lock.release()
+            # Compress local frame to send it via the socket
+            if self.remote_ip:
+                success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                if not success:
+                    raise Exception("Error compressing the image")
+                compressed_local_frame = compressed_local_frame.tobytes()
+                udp_datagram = UDPDatagram(sequence_number,
+                                           f"{self.video_width}x{self.video_height}",
+                                           30,
+                                           compressed_local_frame).encode()
+
+                assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
+
+                self.send_socket.sendto(udp_datagram, (self.remote_ip, 1234))
+                # print(f"Sent {bytes_sent} bytes")
+                sequence_number += 1
 
     def __init__(self, window_size):
         self.gui = gui("Skype", window_size)
@@ -45,19 +70,23 @@ class VideoClient(object):
         self.video_height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         # Add widgets
-        self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME, VideoClient.get_image(self.get_frame()), fmt="PhotoImage")
+        self.last_local_frame = self.get_frame()
+        self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
+                              VideoClient.get_image(self.last_local_frame),
+                              fmt="PhotoImage")
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback)
 
-        # Register repeating function
-        self.gui.setPollTime(POLL_TIME)
-        self.gui.registerEvent(self.repeating_function)
-
         # Initialize variables
+        self.lock = Lock()
+        self.camera_buffer = Queue()
         self.remote_ip = None
-        self.thread = Thread(target=self.receive_video, daemon=True)
+        self.receiving_thread = Thread(target=self.receive_video, daemon=True)
+        self.capture_thread = Thread(target=self.capture_and_send_video, daemon=True)
+        self.visualization_thread = Thread(target=self.display_video, daemon=True)
         self.udp_buffer = UDPBuffer()
-        self.thread.start()
-        self.sequence_number = 0
+        self.receiving_thread.start()
+        self.capture_thread.start()
+        self.visualization_thread.start()
 
     def start(self):
         self.gui.go()
@@ -77,52 +106,32 @@ class VideoClient(object):
     def show_video(self, frame):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
-    def modify_poll_time(self, increment: int):
-        global POLL_TIME
-        POLL_TIME += increment
-        if POLL_TIME < 35:
-            POLL_TIME = 35
-        self.gui.setPollTime(POLL_TIME)
-
-    @notify_timeout(POLL_TIME)
-    def repeating_function(self):
-        global POLL_TIME
-        # Fetch webcam frame
-        local_frame = self.get_frame()
-        # Fetch remote frame
-        remote_frame, remaining = self.udp_buffer.consume()
-        # Show local (and remote) frame
-        if remote_frame:
-            print(remaining)
-            if remaining == -1:
-                self.modify_poll_time(1)
-            elif remaining >= 20:
-                self.modify_poll_time(-1)
-            remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
-            margin = 10
-            mini_frame_width = self.video_width // 4
-            mini_frame_height = self.video_height // 4
-            mini_frame = cv2.resize(local_frame, (mini_frame_width, mini_frame_height))
-            remote_frame[-mini_frame_height - margin:-margin, -mini_frame_width - margin:-margin] = mini_frame
-            self.show_video(remote_frame)
-        else:
-            self.show_video(local_frame)
-
-        # Compress local frame to send it via the socket
-        if self.remote_ip:
-            success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
-            if not success:
-                raise Exception("Error compressing the image")
-            compressed_local_frame = compressed_local_frame.tobytes()
-            udp_datagram = UDPDatagram(self.sequence_number,
-                                       f"{self.video_width}x{self.video_height}",
-                                       1000 // POLL_TIME,
-                                       compressed_local_frame)
-            # TODO: check that len(upp_datagram.encode()) <= 65_507
-
-            bytes_sent = self.send_socket.sendto(udp_datagram.encode(), (self.remote_ip, 1234))
-            # print(f"Sent {bytes_sent} bytes")
-            self.sequence_number += 1
+    def display_video(self):
+        last_remote_frame = None
+        while True:
+            self.lock.acquire()
+            # Fetch webcam frame
+            try:
+                local_frame = self.camera_buffer.get(block=False)
+                self.last_local_frame = local_frame
+            except queue.Empty:
+                local_frame = self.last_local_frame
+            # Fetch remote frame
+            remote_frame, remaining = self.udp_buffer.consume()
+            if not remote_frame:
+                remote_frame = last_remote_frame
+            # Show local (and remote) frame
+            if remote_frame:
+                last_remote_frame = remote_frame
+                remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
+                margin = 10
+                mini_frame_width = self.video_width // 4
+                mini_frame_height = self.video_height // 4
+                mini_frame = cv2.resize(local_frame, (mini_frame_width, mini_frame_height))
+                remote_frame[-mini_frame_height - margin:-margin, -mini_frame_width - margin:-margin] = mini_frame
+                self.show_video(remote_frame)
+            else:
+                self.show_video(local_frame)
 
     def buttons_callback(self, name: str):
         if name == VideoClient.CONNECT_BUTTON:
