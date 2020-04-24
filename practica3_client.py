@@ -12,7 +12,7 @@ from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 PORT = 1234
 MAX_DATAGRAM_SIZE = 65_507
-POLL_TIME = 30
+POLL_TIME = 38
 
 
 class VideoClient(object):
@@ -79,6 +79,7 @@ class VideoClient(object):
 
     @notify_timeout(POLL_TIME)
     def repeating_function(self):
+        global POLL_TIME
         # Fetch webcam frame
         local_frame = self.get_frame()
         # Fetch remote frame
@@ -86,6 +87,10 @@ class VideoClient(object):
         # Show local (and remote) frame
         if remote_frame:
             print(remaining)
+            if remaining == -1:
+                POLL_TIME += 1
+            elif remaining >= 20:
+                POLL_TIME -= 1
             remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
             margin = 10
             mini_frame_width = self.video_width // 4

@@ -120,8 +120,8 @@ class UDPBuffer:
             if not self._buffer and not self.__frozen_frame:
                 return bytes(), 0
             elif not self._buffer:
-                self.__last_seq_number += 1
-                return self.__frozen_frame.data, 0
+                print("WARNING repeated frame")
+                return self.__frozen_frame, -1
 
             consumed_datagram = self._buffer.pop(0)
             self.__last_seq_number = consumed_datagram.seq_number
@@ -135,4 +135,4 @@ class UDPBuffer:
             if not self._buffer:
                 self.__frozen_frame = consumed_datagram
 
-        return consumed_datagram.data, len(self._buffer)
+            return consumed_datagram.data, len(self._buffer)
