@@ -30,9 +30,18 @@ class UDPDatagram:
 
 
 def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
-    fields = message.split(b'#')
-    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2].decode(),
-                       fps=float(fields[3]), data=fields[4])
+    # Find the fourth '#' to split the message (we cannot use split because the binary data could contain '#')
+    count = 0
+    for index, c in enumerate(map(chr, message)):
+        if c == '#':
+            count += 1
+            if count == 4:
+                fields = message[:index].decode().split('#')
+                data = message[index + 1:]
+                break
+
+    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2],
+                       fps=float(fields[3]), data=data)
 
 
 class BufferQuality(Enum):
