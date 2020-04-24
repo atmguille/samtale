@@ -62,6 +62,7 @@ class UDPBuffer:
         self._buffer_quality = BufferQuality.SUPER_LOW
         self.__packages_lost = 0
         self.__delay_sum = 0
+        self.__frozen_frame = None
 
     def insert(self, datagram: UDPDatagram):
         """
@@ -116,8 +117,10 @@ class UDPBuffer:
         with self.__mutex:
             quality = self._buffer_quality
 
-            if not self._buffer:
+            if not self._buffer and not self.__frozen_frame:
                 return bytes(), quality
+            elif not self._buffer:
+                return self.__frozen_frame, quality
 
             consumed_datagram = self._buffer.pop(0)
             self.__last_seq_number = consumed_datagram.seq_number
@@ -127,5 +130,8 @@ class UDPBuffer:
                 self._buffer_quality = BufferQuality.SUPER_LOW
             else:
                 self.__packages_lost -= self._buffer[0].seq_number - consumed_datagram.seq_number - 1
+
+            if not self._buffer:
+                self.__frozen_frame = consumed_datagram
 
         return consumed_datagram.data, quality
