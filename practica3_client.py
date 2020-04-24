@@ -12,7 +12,7 @@ from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 PORT = 1234
 MAX_DATAGRAM_SIZE = 65_507
-POLL_TIME = 38
+POLL_TIME = 40
 
 
 class VideoClient(object):
@@ -77,6 +77,13 @@ class VideoClient(object):
     def show_video(self, frame):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
+    def modify_poll_time(self, increment: int):
+        global POLL_TIME
+        POLL_TIME += increment
+        if POLL_TIME < 35:
+            POLL_TIME = 35
+        self.gui.setPollTime(POLL_TIME)
+
     @notify_timeout(POLL_TIME)
     def repeating_function(self):
         global POLL_TIME
@@ -88,9 +95,9 @@ class VideoClient(object):
         if remote_frame:
             print(remaining)
             if remaining == -1:
-                POLL_TIME += 1
+                self.modify_poll_time(1)
             elif remaining >= 20:
-                POLL_TIME -= 1
+                self.modify_poll_time(-1)
             remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
             margin = 10
             mini_frame_width = self.video_width // 4
