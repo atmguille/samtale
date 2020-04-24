@@ -26,7 +26,7 @@ class VideoClient(object):
             self.remote_ip = addr[0]
             udp_datagram = udp_datagram_from_msg(data)
             self.udp_buffer.insert(udp_datagram)
-            self.lock.release()
+            self.semaphore.release()
 
     def capture_and_send_video(self):
         sequence_number = 0
@@ -35,7 +35,7 @@ class VideoClient(object):
             local_frame = self.get_frame()
             # Notify visualization thread
             self.camera_buffer.put(local_frame)
-            self.lock.release()
+            self.semaphore.release()
             # Compress local frame to send it via the socket
             if self.remote_ip:
                 success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
@@ -77,7 +77,7 @@ class VideoClient(object):
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback)
 
         # Initialize variables
-        self.lock = Lock()
+        self.semaphore = Semaphore()
         self.camera_buffer = Queue()
         self.remote_ip = None
         self.receiving_thread = Thread(target=self.receive_video, daemon=True)
@@ -109,7 +109,7 @@ class VideoClient(object):
     def display_video(self):
         last_remote_frame = None
         while True:
-            self.lock.acquire()
+            self.semaphore.acquire()
             # Fetch webcam frame
             try:
                 local_frame = self.camera_buffer.get(block=False)
