@@ -33,8 +33,22 @@ def timer(function):
         return_value = function(*args, **kwargs)
         end = default_timer()
         time_elapsed = (end - start) * 1000
-        if time_elapsed >= 23:
-            print(f"Function {function.__name__} took {time_elapsed} ms")
+        print(f"Function {function.__name__} took {time_elapsed} ms")
         return return_value
 
     return _timeit
+
+
+def notify_timeout(milliseconds: int):
+    def _timeout(function):
+        def wrapper(*args, **kwargs):
+            start = default_timer()
+            function(*args, **kwargs)
+            end = default_timer()
+            time_elapsed = (end - start) * 1000
+            if time_elapsed >= milliseconds:
+                print(f"[WARNING] {function.__name__} took {time_elapsed} ms")
+        return wrapper
+
+    return _timeout
+

@@ -120,6 +120,7 @@ class UDPBuffer:
             if not self._buffer and not self.__frozen_frame:
                 return bytes(), 0
             elif not self._buffer:
+                self.__last_seq_number += 1
                 return self.__frozen_frame.data, 0
 
             consumed_datagram = self._buffer.pop(0)

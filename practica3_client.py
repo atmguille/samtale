@@ -7,12 +7,12 @@ import numpy as np
 from PIL import Image, ImageTk
 from appJar import gui
 
-from decorators import timer
+from decorators import notify_timeout
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 PORT = 1234
 MAX_DATAGRAM_SIZE = 65_507
-POLLING_TIME = 23
+POLL_TIME = 30
 
 
 class VideoClient(object):
@@ -49,7 +49,7 @@ class VideoClient(object):
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback)
 
         # Register repeating function
-        self.gui.setPollTime(POLLING_TIME)
+        self.gui.setPollTime(POLL_TIME)
         self.gui.registerEvent(self.repeating_function)
 
         # Initialize variables
@@ -77,7 +77,7 @@ class VideoClient(object):
     def show_video(self, frame):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
-    @timer
+    @notify_timeout(POLL_TIME)
     def repeating_function(self):
         # Fetch webcam frame
         local_frame = self.get_frame()
@@ -104,7 +104,7 @@ class VideoClient(object):
             compressed_local_frame = compressed_local_frame.tobytes()
             udp_datagram = UDPDatagram(self.sequence_number,
                                        f"{self.video_width}x{self.video_height}",
-                                       1000 // POLLING_TIME,
+                                       1000 // POLL_TIME,
                                        compressed_local_frame)
             # TODO: check that len(upp_datagram.encode()) <= 65_507
 
