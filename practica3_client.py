@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image, ImageTk
 from appJar import gui
 
+from decorators import timer
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 PORT = 1234
@@ -52,7 +53,7 @@ class VideoClient(object):
         self.gui.registerEvent(self.repeating_function)
 
         # Initialize variables
-        self.remote_ip = None
+        self.remote_ip = "127.0.0.1"
         self.thread = Thread(target=self.receive_video, daemon=True)
         self.udp_buffer = UDPBuffer()
         self.thread.start()
@@ -76,16 +77,15 @@ class VideoClient(object):
     def show_video(self, frame):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
+    @timer
     def repeating_function(self):
-        # remote_frame, _ = self.udp_buffer.consume(1)
-        remote_frame, _ = self.udp_buffer.consume(1)
-        if remote_frame:
-            remote_frame = cv2.imdecode(np.frombuffer(remote_frame[0], np.uint8), 1)
-        else:
-            remote_frame = None
-        # Display local (and remote) frame(s)
+        # Fetch webcam frame
         local_frame = self.get_frame()
-        if remote_frame is not None:
+        # Fetch remote frame
+        remote_frame, _ = self.udp_buffer.consume()
+        # Show local (and remote) frame
+        if remote_frame:
+            remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
             margin = 10
             mini_frame_width = self.video_width // 4
             mini_frame_height = self.video_height // 4
