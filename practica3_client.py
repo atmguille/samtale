@@ -12,7 +12,7 @@ from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 PORT = 1234
 MAX_DATAGRAM_SIZE = 65_507
-POLLING_TIME = 30
+POLLING_TIME = 23
 
 
 class VideoClient(object):

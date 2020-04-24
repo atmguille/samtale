@@ -1,5 +1,6 @@
 import signal
 from timeit import default_timer
+from practica3_client import POLLING_TIME
 
 
 def timeout(milliseconds: int):
@@ -34,7 +35,8 @@ def timer(function):
         end = default_timer()
         time_elapsed = (end - start) * 1000
 
-        print(f"Function {function.__name__} took {time_elapsed} ms")
+        if time_elapsed >= POLLING_TIME:
+            print(f"Function {function.__name__} took {time_elapsed} ms")
         return return_value
 
     return _timeit
