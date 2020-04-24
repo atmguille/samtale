@@ -1,5 +1,5 @@
 import time
-from typing import List, Tuple
+from typing import Tuple
 from enum import Enum, auto
 from threading import Lock
 
@@ -30,9 +30,16 @@ class UDPDatagram:
 
 
 def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
-    fields = message.split(b'#')
-    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2].decode(),
-                       fps=float(fields[3]), data=fields[4])
+    # Find the fourth '#' to split the message (we cannot use split because the binary data could contain '#')
+    count = 0
+    for index, c in enumerate(map(chr, message)):
+        if c == '#':
+            count += 1
+            if count == 4:
+                fields = message[:index].decode().split('#')
+                data = message[index + 1:]
+                return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2],
+                                   fps=float(fields[3]), data=data)
 
 
 class BufferQuality(Enum):
@@ -54,17 +61,18 @@ class UDPBuffer:
         self.__packages_lost = 0
         self.__delay_sum = 0
 
-    def insert(self, datagram: UDPDatagram):
+    def insert(self, datagram: UDPDatagram) -> bool:
         """
         Inserts the specified datagram in the buffer, preserving the order. It discards the datagram if it's too old
         :param datagram
+        :return True if datagram is inserted, False if not
         """
         datagram.set_received_time(time.time())
 
         with self.__mutex:
             # If datagram should have already been consumed, discard it
             if datagram.seq_number < self.__last_seq_number:
-                return
+                return False
 
             buffer_len = len(self._buffer)
 
@@ -73,12 +81,12 @@ class UDPBuffer:
                 self._buffer.append(datagram)
                 self.__delay_sum += datagram.delay_ts
                 self._buffer_quality = BufferQuality.LOW
-                return
+                return True
             # If datagram should be the first element
             if self._buffer[0].seq_number > datagram.seq_number:
                 self._buffer.insert(0, datagram)
                 self.__delay_sum += datagram.delay_ts
-                return
+                return True
 
             for i in range(buffer_len - 1, -1, -1):
                 if self._buffer[i].seq_number < datagram.seq_number:
@@ -89,7 +97,7 @@ class UDPBuffer:
 
                     self.__delay_sum += datagram.delay_ts
                     self._buffer.insert(i+1, datagram)
-                    # Recompute buffer_quality
+                    # Recompute buffer_quality TODO: pesos y score
                     score = self.__packages_lost + 10 * (self.__delay_sum / (buffer_len+1))
                     if score < 10:
                         self._buffer_quality = BufferQuality.HIGH
@@ -97,7 +105,7 @@ class UDPBuffer:
                         self._buffer_quality = BufferQuality.MEDIUM
                     else:
                         self._buffer_quality = BufferQuality.LOW
-                    break
+                    return True
 
     def consume(self) -> Tuple[bytes, BufferQuality]:
         """
@@ -105,18 +113,18 @@ class UDPBuffer:
         :return: consumed_datagram.data, quality
         """
         with self.__mutex:
-            quality = self._buffer_quality
-
             if not self._buffer:
-                return bytes(), quality
+                # TODO: probar last_seq_number += 1
+                return bytes(), BufferQuality.SUPER_LOW
 
             consumed_datagram = self._buffer.pop(0)
             self.__last_seq_number = consumed_datagram.seq_number
             self.__delay_sum -= consumed_datagram.delay_ts
+            quality = self._buffer_quality
 
-            if len(self._buffer) == 0:
+            if not self._buffer:
                 self._buffer_quality = BufferQuality.SUPER_LOW
             else:
                 self.__packages_lost -= self._buffer[0].seq_number - consumed_datagram.seq_number - 1
 
-        return consumed_datagram.data, quality
+            return consumed_datagram.data, quality
