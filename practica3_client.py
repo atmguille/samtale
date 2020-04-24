@@ -12,7 +12,7 @@ from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 PORT = 1234
 MAX_DATAGRAM_SIZE = 65_507
-POLLING_TIME = 20
+POLLING_TIME = 30
 
 
 class VideoClient(object):
@@ -81,9 +81,10 @@ class VideoClient(object):
         # Fetch webcam frame
         local_frame = self.get_frame()
         # Fetch remote frame
-        remote_frame, _ = self.udp_buffer.consume()
+        remote_frame, remaining = self.udp_buffer.consume()
         # Show local (and remote) frame
         if remote_frame:
+            print(remaining)
             remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
             margin = 10
             mini_frame_width = self.video_width // 4

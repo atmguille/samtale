@@ -109,7 +109,7 @@ class UDPBuffer:
                         self._buffer_quality = BufferQuality.LOW
                     break
 
-    def consume(self) -> Tuple[bytes, BufferQuality]:
+    def consume(self) -> Tuple[bytes, int]:
         """
         Consumes first datagram of the buffer, returning its data and the current buffer quality
         :return: consumed_datagram.data, quality
@@ -118,9 +118,9 @@ class UDPBuffer:
             quality = self._buffer_quality
 
             if not self._buffer and not self.__frozen_frame:
-                return bytes(), quality
+                return bytes(), 0
             elif not self._buffer:
-                return self.__frozen_frame.data, quality
+                return self.__frozen_frame.data, 0
 
             consumed_datagram = self._buffer.pop(0)
             self.__last_seq_number = consumed_datagram.seq_number
@@ -134,4 +134,4 @@ class UDPBuffer:
             if not self._buffer:
                 self.__frozen_frame = consumed_datagram
 
-        return consumed_datagram.data, quality
+        return consumed_datagram.data, len(self._buffer)
