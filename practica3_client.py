@@ -79,7 +79,8 @@ class VideoClient(object):
         self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
                               VideoClient.get_image(self.last_local_frame),
                               fmt="PhotoImage")
-        self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback)
+        self.gui.addButtons([VideoClient.CONNECT_BUTTON, VideoClient.END_BUTTON],
+                            self.buttons_callback)
 
         # Initialize variables
         CurrentUser("daniel", "V0", CONTROL_PORT, "asdfasdf", VIDEO_PORT)
