@@ -2,16 +2,19 @@ import queue
 import socket
 from ipaddress import IPv4Network
 from queue import Queue
-from threading import Thread, Semaphore, Lock
+from threading import Thread, Semaphore
 
 import cv2
 import numpy as np
 from PIL import Image, ImageTk
 from appJar import gui
 
+from call_control import ControlDispatcher, CallControl
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
+from user import CurrentUser, User
 
-PORT = 1234
+VIDEO_PORT = 1234
+CONTROL_PORT = 4321
 MAX_DATAGRAM_SIZE = 65_507
 
 
@@ -22,10 +25,10 @@ class VideoClient(object):
     def receive_video(self):
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            self.remote_ip = addr[0]
-            udp_datagram = udp_datagram_from_msg(data)
-            if self.udp_buffer.insert(udp_datagram):  # Release semaphore only is data was really inserted
-                self.semaphore.release()
+            if self.call_control and addr[0] == self.call_control.dst_user.ip:
+                udp_datagram = udp_datagram_from_msg(data)
+                if self.udp_buffer.insert(udp_datagram):  # Release semaphore only is data was really inserted
+                    self.semaphore.release()
 
     def capture_and_send_video(self):
         sequence_number = 0
@@ -36,7 +39,7 @@ class VideoClient(object):
             self.camera_buffer.put(local_frame)
             self.semaphore.release()
             # Compress local frame to send it via the socket
-            if self.remote_ip:
+            if self.call_control:
                 success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 if not success:
                     raise Exception("Error compressing the image")
@@ -48,7 +51,7 @@ class VideoClient(object):
 
                 assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
 
-                self.send_socket.sendto(udp_datagram, (self.remote_ip, 1234))
+                self.send_socket.sendto(udp_datagram, (self.call_control.dst_user.ip, self.call_control.dst_user.udp_port))
                 sequence_number += 1
 
     def __init__(self, window_size):
@@ -57,7 +60,7 @@ class VideoClient(object):
 
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.receive_socket.bind(("0.0.0.0", PORT))
+        self.receive_socket.bind(("0.0.0.0", VIDEO_PORT))
 
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
@@ -75,9 +78,11 @@ class VideoClient(object):
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback)
 
         # Initialize variables
+        CurrentUser("daniel", "V0", CONTROL_PORT, "asdfasdf", VIDEO_PORT)
+        self.dispatcher = ControlDispatcher(self.call_callback)
+        self.call_control = None
         self.semaphore = Semaphore()
         self.camera_buffer = Queue()
-        self.remote_ip = None
         self.receiving_thread = Thread(target=self.receive_video, daemon=True)
         self.capture_thread = Thread(target=self.capture_and_send_video, daemon=True)
         self.visualization_thread = Thread(target=self.display_video, daemon=True)
@@ -136,9 +141,19 @@ class VideoClient(object):
             remote_ip = self.gui.textBox("Connect", "Type the IP of the computer you want to connect to")
             try:
                 IPv4Network(remote_ip)
-                self.remote_ip = remote_ip
+                user = User("qwerty", "V0", CONTROL_PORT, ip=remote_ip)
+                self.call_control = CallControl(user)
+                self.dispatcher.set_call_control(self.call_control)
             except ValueError:
                 pass
+
+    def call_callback(self, username: str, ip: str) -> bool:
+        accept = self.gui.yesNoBox("Incoming call",
+                                   f"The user {username} is calling from {ip}. Do you want to accept the call?")
+        if accept:
+            self.call_control = self.dispatcher.get_call_control()
+
+        return accept
 
 
 if __name__ == '__main__':

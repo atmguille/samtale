@@ -118,19 +118,20 @@ def _open_tcp_socket(src_user: User) -> socket:
     """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((src_user.ip, src_user.tcp_port))
+    sock.bind(("0.0.0.0", src_user.tcp_port))
     return sock
 
 
 class ControlDispatcher:
-    def __init__(self):
+    def __init__(self, callback):
         self.src_user = CurrentUser.currentUser
         self.sock = _open_tcp_socket(self.src_user)
         self._current_call_control = None
         self.__call_control_lock = Lock()
         self._listener = threading.Thread(target=self._listen)
-        self._listener.start()
         self.__listener_stop = False
+        self.callback = callback
+        self._listener.start()
 
     def __del__(self):
         self.__listener_stop = True
@@ -138,7 +139,7 @@ class ControlDispatcher:
         if self._current_call_control:
             del self._current_call_control
 
-    def get_call_control(self):
+    def get_call_control(self) -> CallControl:
         with self.__call_control_lock:
             return self._current_call_control
 
@@ -183,5 +184,12 @@ class ControlDispatcher:
                     # TODO: informar interfaz llamada entrante y si el usuario la deniega etc
                     connection.settimeout(None)  # The connection should not be closed until wanted
                     self._current_call_control = CallControl(incoming_user, connection)
+                    accept = self.callback(incoming_user.nick, incoming_user.ip)
+                    if accept:
+                        self._current_call_control.call_accept()
+                    else:
+                        self._current_call_control.call_deny()
+                        del self._current_call_control
+                        self._current_call_control = None
             except:
                 connection.send(f"CALL_DENIED {self.src_user.nick}".encode())

@@ -32,7 +32,7 @@ class User:
 class CurrentUser(User):
     currentUser = None  # TODO
 
-    def __init__(self, nick: str, tcp_port: int, password: str, udp_port: int = None, ip: str = None):
-        super().__init__(nick, tcp_port, udp_port, ip)
+    def __init__(self, nick: str, protocols: str, tcp_port: int, password: str, udp_port: int = None, ip: str = None):
+        super().__init__(nick, protocols, tcp_port, udp_port=udp_port, ip=ip)
         self.password = password
         CurrentUser.currentUser = self
