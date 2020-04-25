@@ -41,9 +41,6 @@ def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
                 return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2],
                                    fps=float(fields[3]), data=data)
 
-    return UDPDatagram(seq_number=int(fields[0]), ts=float(fields[1]), resolution=fields[2],
-                       fps=float(fields[3]), data=data)
-
 
 class BufferQuality(Enum):
     """
@@ -111,7 +108,7 @@ class UDPBuffer:
                         self._buffer_quality = BufferQuality.LOW
                     return True
 
-    def consume(self) -> Tuple[bytes, int]:
+    def consume(self) -> Tuple[bytes, BufferQuality]:
         """
         Consumes first datagram of the buffer, returning its data and the current buffer quality
         :return: consumed_datagram.data, quality
