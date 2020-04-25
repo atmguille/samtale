@@ -28,7 +28,7 @@ class VideoClient(object):
     def receive_video(self):
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            if self.call_control and addr[0] == self.call_control.dst_user.ip and self.call_control.should_video_flow:
+            if self.call_control and addr[0] == self.call_control.dst_user.ip and self.call_control.should_video_flow():
                 udp_datagram = udp_datagram_from_msg(data)
                 if self.udp_buffer.insert(udp_datagram):  # Release semaphore only is data was really inserted
                     self.video_semaphore.release()
