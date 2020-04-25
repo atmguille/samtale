@@ -53,6 +53,8 @@ class BufferQuality(Enum):
 
 
 class UDPBuffer:
+    MINIMUM_INITIAL_FRAMES = 5
+
     def __init__(self):
         self._buffer = []
         self.__last_seq_number = -1
@@ -60,6 +62,7 @@ class UDPBuffer:
         self._buffer_quality = BufferQuality.SUPER_LOW
         self.__packages_lost = 0
         self.__delay_sum = 0
+        self.__initial_frames = 0
 
     def insert(self, datagram: UDPDatagram) -> bool:
         """
@@ -67,7 +70,6 @@ class UDPBuffer:
         :param datagram
         :return True if datagram is inserted, False if not
         """
-        # TODO: Return if datagram was inserted or not
         datagram.set_received_time(time.time())
 
         with self.__mutex:
@@ -76,6 +78,9 @@ class UDPBuffer:
                 return False
 
             buffer_len = len(self._buffer)
+
+            if self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
+                self.__initial_frames += 1
 
             # If buffer is currently empty
             if buffer_len == 0:
@@ -91,15 +96,15 @@ class UDPBuffer:
 
             for i in range(buffer_len - 1, -1, -1):
                 if self._buffer[i].seq_number < datagram.seq_number:
-                    if i+1 < buffer_len:
+                    if i + 1 < buffer_len:
                         self.__packages_lost -= 1  # Since package is inserted in the middle, there is one less lost
                     else:
                         self.__packages_lost += datagram.seq_number - self._buffer[i].seq_number - 1
 
                     self.__delay_sum += datagram.delay_ts
-                    self._buffer.insert(i+1, datagram)
+                    self._buffer.insert(i + 1, datagram)
                     # Recompute buffer_quality TODO: pesos y score
-                    score = self.__packages_lost + 10 * (self.__delay_sum / (buffer_len+1))
+                    score = self.__packages_lost + 10 * (self.__delay_sum / (buffer_len + 1))
                     if score < 10:
                         self._buffer_quality = BufferQuality.HIGH
                     elif score < 100:
@@ -114,7 +119,7 @@ class UDPBuffer:
         :return: consumed_datagram.data, quality
         """
         with self.__mutex:
-            if not self._buffer:
+            if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 # TODO: probar last_seq_number += 1
                 return bytes(), BufferQuality.SUPER_LOW
 
