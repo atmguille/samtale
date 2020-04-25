@@ -83,7 +83,7 @@ class CallControl:
         """
         Calls the user and runs listener thread
         """
-        string_to_send = f"CALLING {self.src_user.nick} {self.src_user.tcp_port}"
+        string_to_send = f"CALLING {self.src_user.nick} {self.src_user.udp_port}"
         self.connection.send(string_to_send.encode())
         self.connection.settimeout(30)  # Sets timeout long enough so the user is able to answer TODO: 30 segs es mucho o poco???
         self._listener.start()
