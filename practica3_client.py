@@ -79,7 +79,10 @@ class VideoClient(object):
         self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
                               VideoClient.get_image(self.last_local_frame),
                               fmt="PhotoImage")
-        self.gui.addButtons([VideoClient.CONNECT_BUTTON, VideoClient.END_BUTTON],
+        self.gui.addButtons([VideoClient.CONNECT_BUTTON,
+                             VideoClient.END_BUTTON,
+                             VideoClient.HOLD_BUTTON,
+                             VideoClient.RESUME_BUTTON],
                             self.buttons_callback)
 
         # Initialize variables
@@ -126,7 +129,7 @@ class VideoClient(object):
                 local_frame = self.last_local_frame
             # Fetch remote frame
             remote_frame, quality = self.udp_buffer.consume()
-            if not remote_frame:
+            if not remote_frame and self.call_control:
                 remote_frame = last_remote_frame
             # Show local (and remote) frame
             if remote_frame:
@@ -158,9 +161,9 @@ class VideoClient(object):
         elif name == VideoClient.RESUME_BUTTON:
             self.call_control.call_resume()
         elif name == VideoClient.END_BUTTON:
-            self.call_control.call_end()
-            self.dispatcher.del_call_control()
-            #self.call_control = None TODO creo que no hace falta
+            # self.call_control.call_end()
+            # self.dispatcher.del_call_control()
+            self.call_control = None  # TODO creo que no hace falta
 
     def call_callback(self, username: str, ip: str) -> bool:
         accept = self.gui.yesNoBox("Incoming call",
