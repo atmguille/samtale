@@ -72,9 +72,9 @@ class CallControl:
                     # TODO
                     break
                 elif response[0] == "CALL_HOLD":
-                    self.foreign_hold = False
-                elif response[0] == "CALL_RESUME":
                     self.foreign_hold = True
+                elif response[0] == "CALL_RESUME":
+                    self.foreign_hold = False
                 elif response[0] == "CALL_END":
                     # TODO
                     break
