@@ -10,6 +10,7 @@ from PIL import Image, ImageTk
 from appJar import gui
 
 from call_control import ControlDispatcher, CallControl
+from discovery_server import list_users, get_user, UserUnknown
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 from user import CurrentUser, User
 
@@ -24,6 +25,7 @@ class VideoClient(object):
     HOLD_BUTTON = "Hold"
     RESUME_BUTTON = "Resume"
     END_BUTTON = "End Call"
+    USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
 
     def receive_video(self):
         while True:
@@ -78,12 +80,15 @@ class VideoClient(object):
         self.last_local_frame = self.get_frame()
         self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
                               VideoClient.get_image(self.last_local_frame),
-                              fmt="PhotoImage")
-        self.gui.addButtons([VideoClient.CONNECT_BUTTON,
-                             VideoClient.END_BUTTON,
+                              fmt="PhotoImage", row=0, column=1)
+        self.gui.addButtons([VideoClient.END_BUTTON,
                              VideoClient.HOLD_BUTTON,
                              VideoClient.RESUME_BUTTON],
-                            self.buttons_callback)
+                            self.buttons_callback, row=1, column=1)
+        self.users = {user.nick: user for user in list_users()}
+        nicks = list(self.users.keys())
+        self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=0, column=0)
+        self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback, row=1, column=0)
 
         # Initialize variables
         CurrentUser("daniel", "V0", CONTROL_PORT, "asdfasdf", VIDEO_PORT)
@@ -141,10 +146,12 @@ class VideoClient(object):
                 mini_frame = cv2.resize(local_frame, (mini_frame_width, mini_frame_height))
                 remote_frame[-mini_frame_height - margin:-margin, -mini_frame_width - margin:-margin] = mini_frame
                 self.show_video(remote_frame)
-            elif not remote_frame or (self.call_control and not self.call_control.should_video_flow()):  # TODO: solucion temporal en caso de que la llamada esté parada
+            elif not remote_frame or (
+                    self.call_control and not self.call_control.should_video_flow()):  # TODO: solucion temporal en caso de que la llamada esté parada
                 self.show_video(local_frame)
 
     def buttons_callback(self, name: str):
+        """
         if name == VideoClient.CONNECT_BUTTON:
             remote_ip = self.gui.textBox("Connect", "Type the IP of the computer you want to connect to")
             try:
@@ -155,7 +162,8 @@ class VideoClient(object):
                 self.call_control.call_start()
             except ValueError:
                 pass
-        elif name == VideoClient.HOLD_BUTTON:
+        """
+        if name == VideoClient.HOLD_BUTTON:
             self.call_control.call_hold()
             # TODO: intercambiar boton con resume y viceversa
         elif name == VideoClient.RESUME_BUTTON:
@@ -164,6 +172,25 @@ class VideoClient(object):
             # self.call_control.call_end()
             # self.dispatcher.del_call_control()
             self.call_control = None  # TODO creo que no hace falta
+        elif name == VideoClient.CONNECT_BUTTON:
+            text = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
+            # TODO: match this to local database?
+            # TODO: separate thread!
+            try:
+                user = get_user(text)
+            except UserUnknown:
+                # TODO: notify the user
+                # Check if text is an IP (this is mainly for debugging)
+                try:
+                    IPv4Network(text)
+                    user = User("testing", "V0", CONTROL_PORT, ip=text)
+                except ValueError:
+                    # TODO: notify the user
+                    return
+
+            self.call_control = CallControl(user)
+            self.dispatcher.set_call_control(self.call_control)
+            self.call_control.call_start()
 
     def call_callback(self, username: str, ip: str) -> bool:
         accept = self.gui.yesNoBox("Incoming call",
@@ -175,6 +202,6 @@ class VideoClient(object):
 
 
 if __name__ == '__main__':
-    vc = VideoClient("640x520")
+    vc = VideoClient("800x520")
 
     vc.start()
