@@ -8,9 +8,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 from appJar import gui
+from appJar.appjar import ItemLookupError
 
 from call_control import ControlDispatcher, CallControl
-from discovery_server import list_users, get_user, UserUnknown
+from discovery_server import list_users, get_user, UserUnknown, register, RegisterFailed
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 from user import CurrentUser, User
 
@@ -20,11 +21,17 @@ MAX_DATAGRAM_SIZE = 65_507
 
 
 class VideoClient(object):
+    REGISTER_SUBWINDOW = "Register"
+    NICKNAME_WIDGET = "Nickname"
+    PASSWORD_WIDGET = "Password"
+    PORT_WIDGET = "Port"
+    SUBMIT_BUTTON = "Submit"
     VIDEO_WIDGET_NAME = "video"
     CONNECT_BUTTON = "Connect"
     HOLD_BUTTON = "Hold"
     RESUME_BUTTON = "Resume"
     END_BUTTON = "End Call"
+    REGISTER_BUTTON = "Register"
     USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
 
     def receive_video(self):
@@ -81,7 +88,8 @@ class VideoClient(object):
         self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
                               VideoClient.get_image(self.last_local_frame),
                               fmt="PhotoImage", row=0, column=1)
-        self.gui.addButtons([VideoClient.END_BUTTON,
+        self.gui.addButtons([VideoClient.REGISTER_BUTTON,
+                             VideoClient.END_BUTTON,
                              VideoClient.HOLD_BUTTON,
                              VideoClient.RESUME_BUTTON],
                             self.buttons_callback, row=1, column=1)
@@ -163,7 +171,23 @@ class VideoClient(object):
             except ValueError:
                 pass
         """
-        if name == VideoClient.HOLD_BUTTON:
+        if name == VideoClient.REGISTER_BUTTON:
+            try:
+                self.gui.startSubWindow(VideoClient.REGISTER_SUBWINDOW)
+
+                self.gui.addEntry(VideoClient.NICKNAME_WIDGET)
+                self.gui.setEntryDefault(VideoClient.NICKNAME_WIDGET, VideoClient.NICKNAME_WIDGET)
+                self.gui.addSecretEntry(VideoClient.PASSWORD_WIDGET)
+                self.gui.setEntryDefault(VideoClient.PASSWORD_WIDGET, VideoClient.PASSWORD_WIDGET)
+                self.gui.addNumericEntry(VideoClient.PORT_WIDGET)
+                self.gui.setEntryDefault(VideoClient.PORT_WIDGET, VideoClient.PORT_WIDGET)
+                self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
+            except ItemLookupError:
+                pass
+
+            self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
+
+        elif name == VideoClient.HOLD_BUTTON:
             self.call_control.call_hold()
             # TODO: intercambiar boton con resume y viceversa
         elif name == VideoClient.RESUME_BUTTON:
@@ -191,6 +215,16 @@ class VideoClient(object):
             self.call_control = CallControl(user)
             self.dispatcher.set_call_control(self.call_control)
             self.call_control.call_start()
+        elif name == VideoClient.SUBMIT_BUTTON:
+            CurrentUser.currentUser.nick = self.gui.getEntry(VideoClient.NICKNAME_WIDGET)
+            CurrentUser.currentUser.password = self.gui.getEntry(VideoClient.PASSWORD_WIDGET)
+            CurrentUser.currentUser.tcp_port = int(self.gui.getEntry(VideoClient.PORT_WIDGET))
+
+            try:
+                register(CurrentUser.currentUser)
+            except RegisterFailed:
+                print("Register failed")
+                # TODO: notify the user
 
     def call_callback(self, username: str, ip: str) -> bool:
         accept = self.gui.yesNoBox("Incoming call",
