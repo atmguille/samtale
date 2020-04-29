@@ -75,4 +75,4 @@ def list_users() -> List[User]:  # TODO: de verdad esto puede devolver NOK? TODO
     users_str = response[start_index:].split('#')[:-1]  # Avoid final empty element
     users_splitted = [user.split() for user in users_str]
 
-    return [User(nick=user[0], ip=user[1], tcp_port=int(user[2]), protocols=user[3]) for user in users_splitted]
+    return [User(nick=user[0], ip=user[1], tcp_port=int(float(user[2])), protocols=user[3]) for user in users_splitted]
