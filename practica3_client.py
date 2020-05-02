@@ -144,10 +144,10 @@ class VideoClient(object):
             # Fetch remote frame
             remote_frame, quality = self.udp_buffer.consume()
             if not remote_frame and self.dispatcher.in_call():
-                remote_frame = last_remote_frame
+                remote_frame = self.last_remote_frame
             # Show local (and remote) frame
             if remote_frame:
-                last_remote_frame = remote_frame
+                self.last_remote_frame = remote_frame
                 remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
                 margin = 10
                 mini_frame_width = self.video_width // 4

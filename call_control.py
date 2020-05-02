@@ -100,6 +100,12 @@ class CallControl:
                     self.flush_buffer_callback()
                     self.destroy()
                     break
+            else:
+                title = "Call timed out"
+                message = f"The user {self.dst_user.nick} was tired of waiting for you"
+                self.display_message_callback(title, message)
+                self.destroy()
+                break
 
     def call_start(self):
         """
@@ -197,8 +203,17 @@ class ControlDispatcher:
             if self.current_call_control:
                 # TODO
                 raise Exception("You are already in a call!")
-            self.current_call_control = CallControl(user, self.display_callback, self.flush_buffer_callback, self.destroy_current_call)
-            self.current_call_control.call_start()
+            try:
+                self.current_call_control = CallControl(user,
+                                                        self.display_callback,
+                                                        self.flush_buffer_callback,
+                                                        self.destroy_current_call)
+
+                self.current_call_control.call_start()
+            except (ConnectionRefusedError, OSError):
+                title = "Connection error"
+                message = f"Could not connect to user {user.nick} on {user.ip}:{user.tcp_port}"
+                self.display_callback(title, message)
 
     def should_video_flow(self):
         with self.__call_control_lock:
