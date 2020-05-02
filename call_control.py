@@ -1,6 +1,8 @@
 import socket
 import threading
 from threading import Lock
+from typing import Tuple, Optional
+
 from user import User, CurrentUser
 
 BUFFER_SIZE = 50  # TODO: espero que nadie tenga un nick demasiado largo
@@ -40,6 +42,7 @@ class CallControl:
         # Only if both of them are not in "hold", the call can continue
         self.own_hold = True  # If call is held by us
         self.foreign_hold = False  # If call is held by the other user
+        self._sequence_number = 0
 
     def __del__(self):
         self.connection.close()
@@ -85,7 +88,8 @@ class CallControl:
         """
         string_to_send = f"CALLING {self.src_user.nick} {self.src_user.udp_port}"
         self.connection.send(string_to_send.encode())
-        self.connection.settimeout(30)  # Sets timeout long enough so the user is able to answer TODO: 30 segs es mucho o poco???
+        self.connection.settimeout(
+            30)  # Sets timeout long enough so the user is able to answer TODO: 30 segs es mucho o poco???
         self._listener.start()
 
     def call_accept(self):
@@ -146,15 +150,57 @@ class ControlDispatcher:
         if self.current_call_control:
             del self.current_call_control
 
-    def set_call_control(self, call_control: CallControl):
-        with self.__call_control_lock:
-            self.current_call_control = call_control
+    def in_call(self) -> bool:
+        return self.current_call_control is not None
 
-    def del_call_control(self):
+    def call_hold(self):
         with self.__call_control_lock:
             if self.current_call_control:
+                self.current_call_control.call_hold()
+
+    def call_resume(self):
+        with self.__call_control_lock:
+            if self.current_call_control:
+                self.current_call_control.call_resume()
+
+    def call_end(self):
+        with self.__call_control_lock:
+            if self.current_call_control:
+                self.current_call_control.call_end()
                 del self.current_call_control
                 self.current_call_control = None
+
+    def call_start(self, user: User):
+        # Unify call control and set_call_control
+        with self.__call_control_lock:
+            if self.current_call_control:
+                # TODO
+                raise Exception("You are already in a call!")
+            self.current_call_control = CallControl(user)
+            self.current_call_control.call_start()
+
+    def should_video_flow(self):
+        with self.__call_control_lock:
+            if self.current_call_control:
+                return self.current_call_control.should_video_flow()
+            else:
+                return False
+
+    def get_send_address(self) -> Optional[Tuple[str, int]]:
+        with self.__call_control_lock:
+            if self.current_call_control:
+                return self.current_call_control.dst_user.ip, self.current_call_control.dst_user.udp_port
+            else:
+                return None
+
+    def get_sequence_number(self):
+        with self.__call_control_lock:
+            if self.current_call_control:
+                sequence_number = self.current_call_control.sequence_number
+                self.current_call_control.sequence_number += 1
+                return sequence_number
+            # TODO
+            raise Exception("This shouldn't happen")
 
     def _listen(self):
         """
