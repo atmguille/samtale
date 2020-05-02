@@ -3,7 +3,7 @@ from typing import List
 from user import User, CurrentUser
 
 BUFFER_SIZE = 1024  # TODO: ajustar más si se quiere
-server_hostname = 'tfg.eps.uam.es'
+server_hostname = 'vega.ii.uam.es'
 server_port = 8000
 
 
