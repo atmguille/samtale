@@ -102,7 +102,7 @@ class VideoClient(object):
 
         # Initialize variables
         CurrentUser("daniel", "V0", CONTROL_PORT, "asdfasdf", VIDEO_PORT)
-        self.dispatcher = ControlDispatcher(self.incoming_call, self.display_message)
+        self.dispatcher = ControlDispatcher(self.incoming_call, self.display_message, self.flush_buffer)
         self.video_semaphore = Semaphore()
         self.camera_buffer = Queue()
         self.udp_buffer = UDPBuffer()
@@ -194,6 +194,7 @@ class VideoClient(object):
             self.dispatcher.call_resume()
         elif name == VideoClient.END_BUTTON:
             self.dispatcher.call_end()
+            self.flush_buffer()
         elif name == VideoClient.CONNECT_BUTTON:
             text = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
             # TODO: match this to local database?
@@ -231,6 +232,10 @@ class VideoClient(object):
     def display_message(self, title: str, message: str):
         self.gui.infoBox(title, message)
 
+    def flush_buffer(self):
+        # TODO race condition on udpbuffer
+        del self.udp_buffer
+        self.udp_buffer = UDPBuffer()
 
 if __name__ == '__main__':
     vc = VideoClient("800x520")
