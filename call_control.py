@@ -32,17 +32,19 @@ def _create_tcp_connection(dst_user: User) -> socket:
 
 
 class CallControl:
-    def __init__(self, dst_user: User, connection: socket = None):
+    def __init__(self, dst_user: User, display_message, call_dispatcher, connection: socket = None):
         self.src_user = CurrentUser.currentUser
         self.dst_user = dst_user
         self.connection = connection if connection is not None else _create_tcp_connection(dst_user)
         self._listener = threading.Thread(target=self._listen)
         self.__listener_stop = False
+        self.sequence_number = 0
+        self.display_message = display_message
+        self.call_dispatcher = call_dispatcher
         # These two variables are needed in case both of the users hold the call.
         # Only if both of them are not in "hold", the call can continue
         self.own_hold = True  # If call is held by us
         self.foreign_hold = False  # If call is held by the other user
-        self._sequence_number = 0
 
     def __del__(self):
         self.connection.close()
@@ -69,17 +71,26 @@ class CallControl:
                     self.connection.settimeout(None)  # The connection should not be closed until wanted
                     self.own_hold = False  # Start sending video
                 elif response[0] == "CALL_DENIED":
-                    # TODO
+                    title = "Call denied"
+                    message = f"The user {self.dst_user.nick} denied the call"
+                    self.display_message(title, message)
+                    self.call_dispatcher.destroy_current_call()
                     break
                 elif response[0] == "CALL_BUSY":
-                    # TODO
+                    title = "User busy"
+                    message = f"The user {self.dst_user.nick} is already in a call"
+                    self.display_message(title, message)
+                    self.call_dispatcher.destroy_current_call()
                     break
                 elif response[0] == "CALL_HOLD":
                     self.foreign_hold = True
                 elif response[0] == "CALL_RESUME":
                     self.foreign_hold = False
                 elif response[0] == "CALL_END":
-                    # TODO
+                    title = "Call ended"
+                    message = f"The user {self.dst_user.nick} has ended the call"
+                    self.display_message(title, message)
+                    self.call_dispatcher.destroy_current_call()
                     break
 
     def call_start(self):
@@ -134,14 +145,15 @@ def _open_tcp_socket(src_user: User) -> socket:
 
 
 class ControlDispatcher:
-    def __init__(self, callback):
+    def __init__(self, incoming_callback, display_callback):
         self.src_user = CurrentUser.currentUser
         self.sock = _open_tcp_socket(self.src_user)
         self.current_call_control = None
         self.__call_control_lock = Lock()
         self._listener = threading.Thread(target=self._listen)
         self.__listener_stop = False
-        self.callback = callback
+        self.incoming_callback = incoming_callback
+        self.display_callback = display_callback
         self._listener.start()
 
     def __del__(self):
@@ -176,7 +188,7 @@ class ControlDispatcher:
             if self.current_call_control:
                 # TODO
                 raise Exception("You are already in a call!")
-            self.current_call_control = CallControl(user)
+            self.current_call_control = CallControl(user, self.display_callback, self)
             self.current_call_control.call_start()
 
     def should_video_flow(self):
@@ -199,8 +211,13 @@ class ControlDispatcher:
                 sequence_number = self.current_call_control.sequence_number
                 self.current_call_control.sequence_number += 1
                 return sequence_number
-            # TODO
-            raise Exception("This shouldn't happen")
+            return -1
+
+    def destroy_current_call(self):
+        with self.__call_control_lock:
+            if self.current_call_control:
+                del self.current_call_control
+                self.current_call_control = None
 
     def _listen(self):
         """
@@ -231,8 +248,11 @@ class ControlDispatcher:
                                          ip=client_address[0],
                                          udp_port=int(response[2]))
                     connection.settimeout(None)  # The connection should not be closed until wanted
-                    self.current_call_control = CallControl(incoming_user, connection)
-                    accept = self.callback(incoming_user.nick, incoming_user.ip)
+                    self.current_call_control = CallControl(incoming_user,
+                                                            self.display_callback,
+                                                            self,
+                                                            connection=connection)
+                    accept = self.incoming_callback(incoming_user.nick, incoming_user.ip)
                     if accept:
                         self.current_call_control.call_accept()
                     else:

@@ -37,7 +37,7 @@ class VideoClient(object):
     def receive_video(self):
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            if self.dispatcher.should_video_flow() and addr == self.dispatcher.get_send_address():
+            if self.dispatcher.should_video_flow() and addr[0] == self.dispatcher.get_send_address()[0]:
                 udp_datagram = udp_datagram_from_msg(data)
                 if self.udp_buffer.insert(udp_datagram):  # Release semaphore only is data was really inserted
                     self.video_semaphore.release()
@@ -56,6 +56,8 @@ class VideoClient(object):
                     raise Exception("Error compressing the image")
                 compressed_local_frame = compressed_local_frame.tobytes()
                 sequence_number = self.dispatcher.get_sequence_number()
+                if sequence_number < 0:
+                    continue
                 udp_datagram = UDPDatagram(sequence_number,
                                            f"{self.video_width}x{self.video_height}",
                                            30,
@@ -100,7 +102,7 @@ class VideoClient(object):
 
         # Initialize variables
         CurrentUser("daniel", "V0", CONTROL_PORT, "asdfasdf", VIDEO_PORT)
-        self.dispatcher = ControlDispatcher(self.call_callback)
+        self.dispatcher = ControlDispatcher(self.incoming_call, self.display_message)
         self.video_semaphore = Semaphore()
         self.camera_buffer = Queue()
         self.udp_buffer = UDPBuffer()
@@ -220,11 +222,14 @@ class VideoClient(object):
                 print("Register failed")
                 # TODO: notify the user
 
-    def call_callback(self, username: str, ip: str) -> bool:
+    def incoming_call(self, username: str, ip: str) -> bool:
         accept = self.gui.yesNoBox("Incoming call",
                                    f"The user {username} is calling from {ip}. Do you want to accept the call?")
 
         return accept
+
+    def display_message(self, title: str, message: str):
+        self.gui.infoBox(title, message)
 
 
 if __name__ == '__main__':
