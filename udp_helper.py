@@ -53,7 +53,7 @@ class BufferQuality(Enum):
 
 
 class UDPBuffer:
-    MINIMUM_INITIAL_FRAMES = 5
+    MINIMUM_INITIAL_FRAMES = 0
 
     def __init__(self):
         self._buffer = []
@@ -120,7 +120,6 @@ class UDPBuffer:
         """
         with self.__mutex:
             if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
-                # TODO: probar last_seq_number += 1
                 return bytes(), BufferQuality.SUPER_LOW
 
             consumed_datagram = self._buffer.pop(0)
