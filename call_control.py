@@ -194,7 +194,7 @@ class ControlDispatcher:
             if self.current_call_control:
                 # TODO
                 raise Exception("You are already in a call!")
-            self.current_call_control = CallControl(user, self.flush_buffer_callback, self.display_callback, self.destroy_current_call)
+            self.current_call_control = CallControl(user, self.display_callback, self.flush_buffer_callback, self.destroy_current_call)
             self.current_call_control.call_start()
 
     def should_video_flow(self):
@@ -254,8 +254,9 @@ class ControlDispatcher:
                                          ip=client_address[0],
                                          udp_port=int(response[2]))
                     connection.settimeout(None)  # The connection should not be closed until wanted
-                    self.current_call_control = CallControl(incoming_user, self.flush_buffer_callback,
-                                                            self.display_callback, self.destroy_current_call, connection=connection)
+                    self.current_call_control = CallControl(incoming_user, self.display_callback,
+                                                            self.flush_buffer_callback,
+                                                            self.destroy_current_call, connection=connection)
                     accept = self.incoming_callback(incoming_user.nick, incoming_user.ip)
                     if accept:
                         self.current_call_control.call_accept()
