@@ -2,7 +2,7 @@ import socket
 from typing import List
 from user import User, CurrentUser
 
-BUFFER_SIZE = 1024  # TODO: ajustar más si se quiere
+BUFFER_SIZE = 1024
 server_hostname = 'vega.ii.uam.es'
 server_port = 8000
 
@@ -25,12 +25,23 @@ def _send(message: bytes) -> str:
     :param message: message encoded in bytes to be sent
     :return: response of the server TODO: type
     """
+    return_string = ""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:  # TODO: organizar según conveniencia
         connection.connect((socket.gethostbyname(server_hostname), server_port))
         connection.send(message)
         response = connection.recv(BUFFER_SIZE)
-        connection.send("QUIT".encode())  # TODO: esto va aquí o no?
-    return response.decode()
+        return_string += response.decode()
+        connection.setblocking(False)
+        while len(response) == BUFFER_SIZE:
+            try:
+                response = connection.recv(BUFFER_SIZE)
+                return_string += response.decode()
+            except BlockingIOError:
+                # If no data available on socket
+                break
+        connection.send("QUIT".encode())
+
+    return return_string
 
 
 def register(user: CurrentUser):
