@@ -87,6 +87,7 @@ class VideoClient(object):
 
         # Add widgets
         self.last_local_frame = self.get_frame()
+        self.last_remote_frame = None
         self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
                               VideoClient.get_image(self.last_local_frame),
                               fmt="PhotoImage", row=0, column=1)
@@ -132,7 +133,6 @@ class VideoClient(object):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
     def display_video(self):
-        last_remote_frame = None
         while True:
             self.video_semaphore.acquire()
             # Fetch webcam frame
@@ -235,7 +235,10 @@ class VideoClient(object):
     def flush_buffer(self):
         # TODO race condition on udpbuffer
         del self.udp_buffer
+        self.last_remote_frame = None
+        self.last_local_frame = None
         self.udp_buffer = UDPBuffer()
+
 
 if __name__ == '__main__':
     vc = VideoClient("800x520")

@@ -50,7 +50,10 @@ class CallControl:
     def __del__(self):
         self.connection.close()
         self.__listener_stop = True
-        self._listener.join()
+        try:
+            self._listener.join()
+        except RuntimeError:
+            pass
 
     def should_video_flow(self):
         return not (self.own_hold or self.foreign_hold)
