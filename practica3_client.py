@@ -11,16 +11,16 @@ from appJar import gui
 from appJar.appjar import ItemLookupError
 
 from call_control import ControlDispatcher
+from configuration import Configuration
 from discovery_server import list_users, get_user, UserUnknown, register, RegisterFailed
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 from user import CurrentUser, User
 
-VIDEO_PORT = 1234
-CONTROL_PORT = 4321
 MAX_DATAGRAM_SIZE = 65_507
 
 
 class VideoClient(object):
+    REMEMBER_USER_CHECKBOX = "Remember me"
     REGISTER_SUBWINDOW = "Register"
     NICKNAME_WIDGET = "Nickname"
     PASSWORD_WIDGET = "Password"
@@ -33,6 +33,8 @@ class VideoClient(object):
     END_BUTTON = "End Call"
     REGISTER_BUTTON = "Register"
     USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
+
+    CONFIGURATION_FILENAME = "user.ini"
 
     def receive_video(self):
         while True:
@@ -73,9 +75,11 @@ class VideoClient(object):
         self.gui = gui("Skype", window_size)
         self.gui.setGuiPadding(5)
 
+        self.configuration = Configuration()
+
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.receive_socket.bind(("0.0.0.0", VIDEO_PORT))
+        self.receive_socket.bind(("0.0.0.0", self.configuration.udp_port))
 
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
@@ -96,13 +100,15 @@ class VideoClient(object):
                              VideoClient.HOLD_BUTTON,
                              VideoClient.RESUME_BUTTON],
                             self.buttons_callback, row=1, column=1)
+        # Hide buttons
+        # self.gui.hide(VideoClient.END_BUTTON)
+
         self.users = {user.nick: user for user in list_users()}
         nicks = list(self.users.keys())
         self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=0, column=0)
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback, row=1, column=0)
 
-        # Initialize variables
-        CurrentUser("daniel", "V0", CONTROL_PORT, "asdfasdf", VIDEO_PORT)
+        # Initialize threads
         self.dispatcher = ControlDispatcher(self.incoming_call, self.display_message, self.flush_buffer)
         self.video_semaphore = Semaphore()
         self.camera_buffer = Queue()
@@ -174,6 +180,7 @@ class VideoClient(object):
         if name == VideoClient.REGISTER_BUTTON:
             try:
                 self.gui.startSubWindow(VideoClient.REGISTER_SUBWINDOW)
+                self.gui.setSize(300, 200)
 
                 self.gui.addEntry(VideoClient.NICKNAME_WIDGET)
                 self.gui.setEntryDefault(VideoClient.NICKNAME_WIDGET, VideoClient.NICKNAME_WIDGET)
@@ -181,6 +188,15 @@ class VideoClient(object):
                 self.gui.setEntryDefault(VideoClient.PASSWORD_WIDGET, VideoClient.PASSWORD_WIDGET)
                 self.gui.addNumericEntry(VideoClient.PORT_WIDGET)
                 self.gui.setEntryDefault(VideoClient.PORT_WIDGET, VideoClient.PORT_WIDGET)
+
+                # Add the current configuration values if they are loaded
+                if self.configuration.is_loaded():
+                    self.gui.setEntry(VideoClient.NICKNAME_WIDGET, self.configuration.nickname)
+                    self.gui.setEntry(VideoClient.PASSWORD_WIDGET, self.configuration.password)
+                    self.gui.setEntry(VideoClient.PORT_WIDGET, self.configuration.control_port)
+
+                self.gui.addCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
+                self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                 self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
             except ItemLookupError:
                 pass
@@ -206,19 +222,18 @@ class VideoClient(object):
                 # Check if text is an IP (this is mainly for debugging)
                 try:
                     IPv4Network(text)
-                    user = User("testing", "V0", CONTROL_PORT, ip=text)
+                    user = User("testing", "V0", 4321, ip=text)
                 except ValueError:
                     # TODO: notify the user
                     return
 
             self.dispatcher.call_start(user)
         elif name == VideoClient.SUBMIT_BUTTON:
-            CurrentUser.currentUser.nick = self.gui.getEntry(VideoClient.NICKNAME_WIDGET)
-            CurrentUser.currentUser.password = self.gui.getEntry(VideoClient.PASSWORD_WIDGET)
-            CurrentUser.currentUser.tcp_port = int(self.gui.getEntry(VideoClient.PORT_WIDGET))
-
             try:
-                register(CurrentUser.currentUser)
+                self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_WIDGET),
+                                        self.gui.getEntry(VideoClient.PASSWORD_WIDGET),
+                                        int(self.gui.getEntry(VideoClient.PORT_WIDGET)))
+                self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
             except RegisterFailed:
                 print("Register failed")
                 # TODO: notify the user

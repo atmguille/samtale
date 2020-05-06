@@ -160,6 +160,7 @@ def _open_tcp_socket(src_user: User) -> socket:
 
 class ControlDispatcher:
     def __init__(self, incoming_callback, display_message_callback, flush_buffer_callback):
+        # TODO: this shouldn't fail if the current user is not created yet
         self.src_user = CurrentUser.currentUser
         self.sock = _open_tcp_socket(self.src_user)
         self.current_call_control = None
