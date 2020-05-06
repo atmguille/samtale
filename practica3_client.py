@@ -179,6 +179,7 @@ class VideoClient(object):
         """
         if name == VideoClient.REGISTER_BUTTON:
             try:
+                # Load the register window
                 self.gui.startSubWindow(VideoClient.REGISTER_SUBWINDOW)
                 self.gui.setSize(300, 200)
 
@@ -199,6 +200,7 @@ class VideoClient(object):
                 self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                 self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
             except ItemLookupError:
+                # The register window has already been launched in the session
                 pass
 
             self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
@@ -230,9 +232,11 @@ class VideoClient(object):
             self.dispatcher.call_start(user)
         elif name == VideoClient.SUBMIT_BUTTON:
             try:
+                persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                 self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_WIDGET),
                                         self.gui.getEntry(VideoClient.PASSWORD_WIDGET),
-                                        int(self.gui.getEntry(VideoClient.PORT_WIDGET)))
+                                        int(self.gui.getEntry(VideoClient.PORT_WIDGET)),
+                                        persistent=persistent)
                 self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
             except RegisterFailed:
                 print("Register failed")

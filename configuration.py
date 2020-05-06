@@ -34,7 +34,11 @@ class Configuration:
     def is_loaded(self):
         return self.nickname is not None
 
-    def load(self, nickname: str, password: str, control_port: int, udp_port: int = DEFAULT_UDP_PORT):
+    def load(self, nickname: str,
+             password: str,
+             control_port: int,
+             udp_port: int = DEFAULT_UDP_PORT,
+             persistent: bool = True):
         self.nickname = nickname
         self.password = password
         self.control_port = control_port
@@ -48,10 +52,11 @@ class Configuration:
             CurrentUser.currentUser = None
             raise RegisterFailed
 
-        self.config["Configuration"]["nickname"] = self.nickname
-        self.config["Configuration"]["password"] = self.password
-        self.config["Configuration"]["control_port"] = str(self.control_port)
-        self.config["Configuration"]["udp_port"] = str(self.udp_port)
+        if persistent:
+            self.config["Configuration"]["nickname"] = self.nickname
+            self.config["Configuration"]["password"] = self.password
+            self.config["Configuration"]["control_port"] = str(self.control_port)
+            self.config["Configuration"]["udp_port"] = str(self.udp_port)
 
-        with open(Configuration.CONFIGURATION_FILENAME, "w") as f:
-            self.config.write(f)
+            with open(Configuration.CONFIGURATION_FILENAME, "w") as f:
+                self.config.write(f)
