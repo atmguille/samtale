@@ -34,8 +34,6 @@ class VideoClient(object):
     REGISTER_BUTTON = "Register"
     USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
 
-    CONFIGURATION_FILENAME = "user.ini"
-
     def receive_video(self):
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)

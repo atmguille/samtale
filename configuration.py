@@ -20,6 +20,13 @@ class Configuration:
                 self.udp_port = int(udp_port)
 
                 CurrentUser(self.nickname, "V0", self.control_port, self.password, udp_port=self.udp_port)
+                # Check if the password is correct
+                try:
+                    register(CurrentUser.currentUser)
+                except RegisterFailed:
+                    CurrentUser.currentUser = None
+                    raise RegisterFailed
+
                 return
             except KeyError:
                 # File is corrupted or has been tampered
