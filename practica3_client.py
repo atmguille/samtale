@@ -1,6 +1,7 @@
 import queue
 import socket
 from ipaddress import IPv4Network
+from os import _exit
 from queue import Queue
 from threading import Thread, Semaphore
 
@@ -261,3 +262,4 @@ if __name__ == '__main__':
     vc = VideoClient("800x520")
 
     vc.start()
+    _exit(0)

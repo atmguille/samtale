@@ -36,7 +36,7 @@ class CallControl:
         self.src_user = CurrentUser.currentUser
         self.dst_user = dst_user
         self.connection = connection if connection is not None else _create_tcp_connection(dst_user)
-        self._listener = threading.Thread(target=self._listen)
+        self._listener = threading.Thread(target=self._listen, daemon=True)
         self.__listener_stop = False
         self.sequence_number = 0
         self.display_message_callback = display_message_callback
@@ -165,7 +165,7 @@ class ControlDispatcher:
         self.sock = _open_tcp_socket(self.src_user)
         self.current_call_control = None
         self.__call_control_lock = Lock()
-        self._listener = threading.Thread(target=self._listen)
+        self._listener = threading.Thread(target=self._listen, daemon=True)
         self.__listener_stop = False
         self.incoming_callback = incoming_callback
         self.display_callback = display_message_callback
