@@ -112,6 +112,8 @@ class CallControl:
                 self.display_message_callback(title, message)
                 self.destroy()
                 break
+            else:
+                break
 
     def call_start(self):
         """
