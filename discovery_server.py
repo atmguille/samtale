@@ -9,17 +9,20 @@ server_port = 8000
 
 class RegisterFailed(Exception):
     def __init__(self):
-        message = "Register failed"
-        super().__init__(message)
+        super().__init__("Register failed")
 
 
 class UserUnknown(Exception):
     def __init__(self, nick: str):
-        message = f"User {nick} was not found"
-        super().__init__(message)
+        super().__init__(f"User {nick} was not found")
 
 
-def _send(message: bytes) -> str:
+class BadUser(Exception):
+    def __init__(self, nick: str):
+        super().__init__(f"Couldn't parse {nick} information")
+
+
+def _send(message: bytes, end_char: chr = None) -> str:
     """
     Sends a message to the Discovery Server
     :param message: message encoded in bytes to be sent
@@ -31,14 +34,14 @@ def _send(message: bytes) -> str:
         connection.send(message)
         response = connection.recv(BUFFER_SIZE)
         return_string += response.decode()
-        connection.setblocking(False)
-        while len(response) == BUFFER_SIZE:
-            try:
-                response = connection.recv(BUFFER_SIZE)
-                return_string += response.decode()
-            except BlockingIOError:
-                # If no data available on socket
-                break
+        if end_char:
+            connection.setblocking(False)
+            while chr(response[-1]) != end_char:
+                try:
+                    response = connection.recv(BUFFER_SIZE)
+                    return_string += response.decode()
+                except BlockingIOError:
+                    pass
         connection.send("QUIT".encode())
 
     return return_string
@@ -68,7 +71,10 @@ def get_user(nick: str) -> User:
     if response[0] == "NOK":
         raise UserUnknown(nick)
     else:
-        return User(nick, ip=response[3], tcp_port=int(response[4]), protocols=response[5])
+        try:
+            return User(nick, ip=response[3], tcp_port=int(response[4]), protocols=response[5])
+        except Exception:
+            raise BadUser(nick)
 
 
 def list_users() -> List[User]:  # TODO: de verdad esto puede devolver NOK? TODO: devuelve ts en vez de protocols: PROTESTAR
@@ -80,7 +86,7 @@ def list_users() -> List[User]:  # TODO: de verdad esto puede devolver NOK? TODO
         we look for N_USERS and start splitting the list from there. Afterwards, we get a list with all the info
         of each user in a string (users_str), so we need to split again each user to get a list of the needed values"""
 
-    response = _send("LIST_USERS".encode())
+    response = _send("LIST_USERS".encode(), end_char='#')
     n_users = response.split()[2]
     start_index = response.find(n_users) + len(n_users) + 1  # The number itself and the white space
     users_str = response[start_index:].split('#')[:-1]  # Avoid final empty element
@@ -90,7 +96,8 @@ def list_users() -> List[User]:  # TODO: de verdad esto puede devolver NOK? TODO
     for user in users_splitted:
         try:
             users.append(User(nick=user[0], ip=user[1], tcp_port=int(float(user[2])), protocols=user[3]))
-        except ValueError as e:
+        except Exception as e:
             print(f"Error parsing user: {e}")
             pass
+
     return users
