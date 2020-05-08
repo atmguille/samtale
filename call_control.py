@@ -1,6 +1,7 @@
 import socket
 import threading
 from threading import Lock
+from time import sleep
 from typing import Tuple, Optional
 
 from user import User, CurrentUser
@@ -33,6 +34,7 @@ def _create_tcp_connection(dst_user: User) -> socket:
 
 class CallControl:
     def __init__(self, dst_user: User, display_message_callback, flush_buffer_callback, destroy, connection: socket = None):
+        self.__initialized = False
         self.src_user = CurrentUser.currentUser
         self.dst_user = dst_user
         self.connection = connection if connection is not None else _create_tcp_connection(dst_user)
@@ -46,14 +48,16 @@ class CallControl:
         # Only if both of them are not in "hold", the call can continue
         self.own_hold = True  # If call is held by us
         self.foreign_hold = False  # If call is held by the other user
+        self.__initialized = True
 
     def __del__(self):
-        self.connection.close()
-        self.__listener_stop = True
-        try:
-            self._listener.join()
-        except RuntimeError:
-            pass
+        if self.__initialized:
+            self.connection.close()
+            self.__listener_stop = True
+            try:
+                self._listener.join()
+            except RuntimeError:
+                pass
 
     def should_video_flow(self):
         return not (self.own_hold or self.foreign_hold)
@@ -63,6 +67,7 @@ class CallControl:
         Function that is executed by the listener. Checks if the call must be held, resumed or ended
         """
         # TODO: informar a la interfaz de lo que va pasando
+        is_valid_connection = False
         while not self.__listener_stop:
             try:
                 response = self.connection.recv(BUFFER_SIZE).decode().split()
@@ -73,6 +78,7 @@ class CallControl:
                 self.destroy()
                 break
             if response:
+                is_valid_connection = True
                 if response[0] == "CALL_ACCEPTED":
                     self.dst_user.update_udp_port(int(response[2]))
                     self.connection.settimeout(None)  # The connection should not be closed until wanted
@@ -100,7 +106,7 @@ class CallControl:
                     self.flush_buffer_callback()
                     self.destroy()
                     break
-            else:
+            elif not is_valid_connection:
                 title = "Call timed out"
                 message = f"The user {self.dst_user.nick} was tired of waiting for you"
                 self.display_message_callback(title, message)
@@ -217,11 +223,13 @@ class ControlDispatcher:
                 self.display_callback(title, message)
 
     def should_video_flow(self):
-        with self.__call_control_lock:
-            if self.current_call_control:
-                return self.current_call_control.should_video_flow()
-            else:
-                return False
+        success = self.__call_control_lock.acquire(blocking=False)
+        if success:
+            return_value = self.current_call_control and self.current_call_control.should_video_flow()
+            self.__call_control_lock.release()
+            return return_value
+
+        return False
 
     def get_send_address(self) -> Optional[Tuple[str, int]]:
         with self.__call_control_lock:

@@ -4,6 +4,7 @@ from ipaddress import IPv4Network
 from os import _exit
 from queue import Queue
 from threading import Thread, Semaphore
+from time import sleep
 
 import cv2
 import numpy as np
@@ -163,6 +164,23 @@ class VideoClient(object):
             elif not remote_frame:
                 self.show_video(local_frame)
 
+    def call(self):
+        text = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
+        # TODO: match this to local database?
+        try:
+            user = get_user(text)
+        except UserUnknown:
+            # TODO: notify the user
+            # Check if text is an IP (this is mainly for debugging)
+            try:
+                IPv4Network(text)
+                user = User("testing", "V0", 4321, ip=text)
+            except ValueError:
+                # TODO: notify the user
+                return
+
+        self.dispatcher.call_start(user)
+
     def buttons_callback(self, name: str):
         """
         if name == VideoClient.CONNECT_BUTTON:
@@ -213,22 +231,7 @@ class VideoClient(object):
             self.dispatcher.call_end()
             self.flush_buffer()
         elif name == VideoClient.CONNECT_BUTTON:
-            text = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
-            # TODO: match this to local database?
-            # TODO: separate thread!
-            try:
-                user = get_user(text)
-            except UserUnknown:
-                # TODO: notify the user
-                # Check if text is an IP (this is mainly for debugging)
-                try:
-                    IPv4Network(text)
-                    user = User("testing", "V0", 4321, ip=text)
-                except ValueError:
-                    # TODO: notify the user
-                    return
-
-            self.dispatcher.call_start(user)
+            Thread(target=self.call, daemon=True).start()
         elif name == VideoClient.SUBMIT_BUTTON:
             try:
                 persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
