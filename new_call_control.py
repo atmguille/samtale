@@ -30,7 +30,6 @@ class CallControl:
         self.control_thread = Thread(target=self.control_daemon, daemon=True)
         self.control_thread.start()
         # Call
-        self.call_daemon_continue = True
         self._in_call = False
         self._waiting = False
         self.we_on_hold = False
@@ -138,14 +137,13 @@ class CallControl:
             self.video_client.display_message("You are making a call",
                                               "You have to cancel it in order to make a new call")
             return
-        else:
-            self._waiting = True
-            self.call_lock.release()
+
+        self._waiting = True
+        self.call_lock.release()
 
         Thread(target=self._call_start, args=(nickname,), daemon=True).start()
 
     def _call_end(self):
-        self.call_daemon_continue = False
         self._in_call = False
         self._waiting = False
         self.we_on_hold = False
@@ -158,10 +156,6 @@ class CallControl:
     def call_end(self):
         self.call_socket.send(f"CALL_END {CurrentUser.currentUser.nick}".encode())
         self._call_end()
-
-        print("Estoy empezando a esperar")
-        self.call_thread.join()
-        print("Terminó!")
 
     def call_hold(self):
         if self.in_call():
@@ -225,9 +219,14 @@ class CallControl:
         """
         Function that is executed by the listener. Checks if the call must be held, resumed or ended
         """
-        while self.call_daemon_continue:
+        while True:
             try:
-                response = self.call_socket.recv(BUFFER_SIZE).decode().split()
+                try:
+                    response = self.call_socket.recv(BUFFER_SIZE)
+                except socket.error:
+                    break
+
+                response = response.decode().split()
                 if not response:
                     break
                 if response[0] == "CALL_HOLD":
