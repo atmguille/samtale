@@ -165,12 +165,12 @@ class CallControl:
 
     def call_hold(self):
         if self.in_call():
-            Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser.currentUser.nick}")).start()
+            Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser.currentUser.nick}".encode())).start()
             self.we_on_hold = True
 
     def call_resume(self):
         if self.in_call():
-            Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser.currentUser.nick}")).start()
+            Thread(target=lambda: self.call_socket.send(f"CALL_RESUME {CurrentUser.currentUser.nick}".encode())).start()
             self.we_on_hold = False
 
     def control_daemon(self):
