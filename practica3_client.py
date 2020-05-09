@@ -29,6 +29,7 @@ class VideoClient(object):
     CONNECT_BUTTON = "Connect"
     HOLD_BUTTON = "Hold"
     RESUME_BUTTON = "Resume"
+    HOLD_RESUME_BUTTON = "Hold/Resume"
     END_BUTTON = "End Call"
     REGISTER_BUTTON = "Register"
     USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
@@ -94,11 +95,9 @@ class VideoClient(object):
                               fmt="PhotoImage", row=0, column=1)
         self.gui.addButtons([VideoClient.REGISTER_BUTTON,
                              VideoClient.END_BUTTON,
-                             VideoClient.HOLD_BUTTON,
-                             VideoClient.RESUME_BUTTON],
+                             VideoClient.HOLD_RESUME_BUTTON],
                             self.buttons_callback, row=1, column=1)
-        # Hide buttons
-        # self.gui.hide(VideoClient.END_BUTTON)
+        self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
 
         self.users = {user.nick: user for user in list_users()}
         nicks = list(self.users.keys())
@@ -124,7 +123,9 @@ class VideoClient(object):
         self.gui.go()
 
     def stop(self) -> bool:
-        self.call_control.call_end()
+        if self.call_control.in_call():
+            self.call_control.call_end()
+
         return True
 
     def get_frame(self):
@@ -209,14 +210,19 @@ class VideoClient(object):
 
             self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
 
-        elif name == VideoClient.HOLD_BUTTON:
-            self.call_control.call_hold()
+        elif name == VideoClient.HOLD_RESUME_BUTTON:
+            if self.call_control.in_call():
+                if self.gui.getButton(VideoClient.HOLD_RESUME_BUTTON) == VideoClient.HOLD_BUTTON:
+                    self.call_control.call_hold()
+                    self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.RESUME_BUTTON)
+                else:
+                    self.call_control.call_resume()
+                    self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
+
             # TODO: intercambiar boton con resume y viceversa
-        elif name == VideoClient.RESUME_BUTTON:
-            self.call_control.call_resume()
         elif name == VideoClient.END_BUTTON:
-            self.call_control.call_end()
-            self.flush_buffer()
+            if self.call_control.in_call():
+                self.call_control.call_end()
         elif name == VideoClient.CONNECT_BUTTON:
             self.call_control.call_start(self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET))
         elif name == VideoClient.SUBMIT_BUTTON:
@@ -258,6 +264,7 @@ class VideoClient(object):
     def display_connect(self):
         self.gui.setButton(VideoClient.CONNECT_BUTTON,
                            VideoClient.CONNECT_BUTTON)
+        self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
 
 
 if __name__ == '__main__':

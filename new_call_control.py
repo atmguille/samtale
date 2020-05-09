@@ -159,19 +159,16 @@ class CallControl:
 
     # TODO: pasar a decorador, ver si es mejor mandar por UDP o un thread
     def call_end(self):
-        if self.in_call():
-            self.call_socket.send(f"CALL_END {CurrentUser.currentUser.nick}".encode())
-            self._call_end()
+        self.call_socket.send(f"CALL_END {CurrentUser.currentUser.nick}".encode())
+        self._call_end()
 
     def call_hold(self):
-        if self.in_call():
-            Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser.currentUser.nick}".encode())).start()
-            self.we_on_hold = True
+        Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser.currentUser.nick}".encode())).start()
+        self.we_on_hold = True
 
     def call_resume(self):
-        if self.in_call():
-            Thread(target=lambda: self.call_socket.send(f"CALL_RESUME {CurrentUser.currentUser.nick}".encode())).start()
-            self.we_on_hold = False
+        Thread(target=lambda: self.call_socket.send(f"CALL_RESUME {CurrentUser.currentUser.nick}".encode())).start()
+        self.we_on_hold = False
 
     def control_daemon(self):
         """
