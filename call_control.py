@@ -33,7 +33,8 @@ def _create_tcp_connection(dst_user: User) -> socket:
 
 
 class CallControl:
-    def __init__(self, dst_user: User, display_message_callback, flush_buffer_callback, destroy, connection: socket = None):
+    def __init__(self, dst_user: User, display_message_callback, flush_buffer_callback, destroy,
+                 connection: socket = None):
         self.__initialized = False
         self.src_user = CurrentUser.currentUser
         self.dst_user = dst_user
@@ -172,6 +173,8 @@ class ControlDispatcher:
         self.src_user = CurrentUser.currentUser
         self.sock = _open_tcp_socket(self.src_user)
         self.current_call_control = None
+        self.__idle = True
+        self.__idle_lock = Lock()
         self.__call_control_lock = Lock()
         self._listener = threading.Thread(target=self._listen, daemon=True)
         self.__listener_stop = False
@@ -205,13 +208,19 @@ class ControlDispatcher:
                 self.current_call_control.call_end()
                 del self.current_call_control
                 self.current_call_control = None
+                with self.__idle_lock:
+                    self.__idle = True
 
     def call_start(self, user: User):
         # Unify call control and set_call_control
+        with self.__idle_lock:
+            if self.__idle:
+                self.__idle = False
+            else:
+                self.display_callback("You're already in a call", "You're already in a call")
+                return
+
         with self.__call_control_lock:
-            if self.current_call_control:
-                # TODO
-                raise Exception("You are already in a call!")
             try:
                 self.current_call_control = CallControl(user,
                                                         self.display_callback,
@@ -253,6 +262,8 @@ class ControlDispatcher:
             if self.current_call_control:
                 del self.current_call_control
                 self.current_call_control = None
+                with self.__idle_lock:
+                    self.__idle = True
 
     def _listen(self):
         """
@@ -269,10 +280,14 @@ class ControlDispatcher:
             try:
                 response = connection.recv(BUFFER_SIZE).decode().split()
 
-                with self.__call_control_lock:  # Block call control until resolving request
-                    if self.current_call_control:  # If a call control exists, the user is busy
+                with self.__idle_lock:
+                    if not self.__idle:
                         connection.send("CALL_BUSY".encode())
+                        self.display_callback(f"{response[1]} called you",
+                                              f"{response[1]} called you")
                         continue
+
+                with self.__call_control_lock:  # Block call control until resolving request
 
                     if response[0] != "CALLING":
                         raise Exception("Error in received string")
