@@ -1,10 +1,8 @@
 import queue
 import socket
-from ipaddress import IPv4Network
 from os import _exit
 from queue import Queue
 from threading import Thread, Semaphore
-from time import sleep
 
 import cv2
 import numpy as np
@@ -12,11 +10,10 @@ from PIL import Image, ImageTk
 from appJar import gui
 from appJar.appjar import ItemLookupError
 
-from call_control import ControlDispatcher
+from new_call_control import CallControl
 from configuration import Configuration
-from discovery_server import list_users, get_user, UserUnknown, register, RegisterFailed
+from discovery_server import list_users, RegisterFailed
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
-from user import CurrentUser, User
 
 MAX_DATAGRAM_SIZE = 65_507
 
@@ -39,7 +36,7 @@ class VideoClient(object):
     def receive_video(self):
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            if self.dispatcher.should_video_flow() and addr[0] == self.dispatcher.get_send_address()[0]:
+            if self.call_control.should_video_flow() and addr[0] == self.call_control.get_send_address()[0]:
                 udp_datagram = udp_datagram_from_msg(data)
                 if self.udp_buffer.insert(udp_datagram):  # Release semaphore only is data was really inserted
                     self.video_semaphore.release()
@@ -52,12 +49,12 @@ class VideoClient(object):
             self.camera_buffer.put(local_frame)
             self.video_semaphore.release()
             # Compress local frame to send it via the socket
-            if self.dispatcher.should_video_flow():
+            if self.call_control.should_video_flow():
                 success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 if not success:
                     raise Exception("Error compressing the image")
                 compressed_local_frame = compressed_local_frame.tobytes()
-                sequence_number = self.dispatcher.get_sequence_number()
+                sequence_number = self.call_control.get_sequence_number()
                 if sequence_number < 0:
                     continue
                 udp_datagram = UDPDatagram(sequence_number,
@@ -67,7 +64,7 @@ class VideoClient(object):
 
                 assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
 
-                address = self.dispatcher.get_send_address()
+                address = self.call_control.get_send_address()
                 if address:
                     self.send_socket.sendto(udp_datagram, address)
 
@@ -109,7 +106,7 @@ class VideoClient(object):
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback, row=1, column=0)
 
         # Initialize threads
-        self.dispatcher = ControlDispatcher(self.incoming_call, self.display_message, self.flush_buffer)
+        self.call_control = CallControl(self)
         self.video_semaphore = Semaphore()
         self.camera_buffer = Queue()
         self.udp_buffer = UDPBuffer()
@@ -149,7 +146,7 @@ class VideoClient(object):
                 local_frame = self.last_local_frame
             # Fetch remote frame
             remote_frame, quality = self.udp_buffer.consume()
-            if not remote_frame and self.dispatcher.in_call():
+            if not remote_frame and self.call_control.in_call():
                 remote_frame = self.last_remote_frame
             # Show local (and remote) frame
             if remote_frame:
@@ -163,23 +160,6 @@ class VideoClient(object):
                 self.show_video(remote_frame)
             elif not remote_frame:
                 self.show_video(local_frame)
-
-    def call(self):
-        text = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
-        # TODO: match this to local database?
-        try:
-            user = get_user(text)
-        except UserUnknown:
-            # TODO: notify the user
-            # Check if text is an IP (this is mainly for debugging)
-            try:
-                IPv4Network(text)
-                user = User("testing", "V0", 4321, ip=text)
-            except ValueError:
-                # TODO: notify the user
-                return
-
-        self.dispatcher.call_start(user)
 
     def buttons_callback(self, name: str):
         """
@@ -223,15 +203,15 @@ class VideoClient(object):
             self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
 
         elif name == VideoClient.HOLD_BUTTON:
-            self.dispatcher.call_hold()
+            self.call_control.call_hold()
             # TODO: intercambiar boton con resume y viceversa
         elif name == VideoClient.RESUME_BUTTON:
-            self.dispatcher.call_resume()
+            self.call_control.call_resume()
         elif name == VideoClient.END_BUTTON:
-            self.dispatcher.call_end()
+            self.call_control.call_end()
             self.flush_buffer()
         elif name == VideoClient.CONNECT_BUTTON:
-            Thread(target=self.call, daemon=True).start()
+            self.call_control.call_start(self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET))
         elif name == VideoClient.SUBMIT_BUTTON:
             try:
                 persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
