@@ -89,7 +89,7 @@ class CallControl:
         except socket.timeout:
             # This exception only happend if the other user does not answer to our call
             self.video_client.display_message("Call not answered",
-                                              f"The user {self.dst_user.nick} did not answer the call")
+                                              f"The user {user.nick} did not answer the call")
             with self.call_lock:
                 self._waiting = False
 
@@ -237,9 +237,9 @@ class CallControl:
                 elif response[0] == "CALL_RESUME":
                     self.they_on_hold = False
                 elif response[0] == "CALL_END":
+                    self._call_end()
                     self.video_client.display_message("Call ended",
                                                       f"The user {self.dst_user.nick} has ended the call")
-                    self._call_end()
                     return
             except (ValueError, IndexError) as e:
                 print(f"Error recieving information from client: {e}")
