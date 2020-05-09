@@ -28,6 +28,7 @@ class CallControl:
         self.video_client = video_client
         # Control thread
         self.control_thread = Thread(target=self.control_daemon, daemon=True)
+        self.control_thread.start()
         # Call
         self.call_daemon_continue = True
         self._in_call = False
@@ -206,6 +207,8 @@ class CallControl:
                 connection.settimeout(None)  # The connection should not be closed until wanted
                 accept = self.video_client.incoming_call(incoming_user.nick, incoming_user.ip)
                 if accept:
+                    answer = f"CALL_ACCEPTED {CurrentUser.currentUser.nick} {CurrentUser.currentUser.udp_port}".encode()
+                    connection.send(answer)
                     self._in_call = True
                     self.dst_user = incoming_user
                     self.call_socket = connection
