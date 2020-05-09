@@ -232,6 +232,8 @@ class ControlDispatcher:
                 title = "Connection error"
                 message = f"Could not connect to user {user.nick} on {user.ip}:{user.tcp_port}"
                 self.display_callback(title, message)
+                with self.__idle_lock:
+                    self.__idle = True
 
     def should_video_flow(self):
         success = self.__call_control_lock.acquire(blocking=False)
