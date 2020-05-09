@@ -154,8 +154,9 @@ class CallControl:
 
     # TODO: pasar a decorador, ver si es mejor mandar por UDP o un thread
     def call_end(self):
-        self.call_socket.send(f"CALL_END {CurrentUser.currentUser.nick}".encode())
-        self._call_end()
+        if self.in_call():
+            self.call_socket.send(f"CALL_END {CurrentUser.currentUser.nick}".encode())
+            self._call_end()
 
     def call_hold(self):
         if self.in_call():
