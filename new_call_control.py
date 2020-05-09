@@ -69,6 +69,7 @@ class CallControl:
             with self.call_lock:
                 self._waiting = False
 
+            self.video_client.display_connect()
             self.video_client.display_message("Error fetching user", str(e))
             return
 
@@ -77,11 +78,13 @@ class CallControl:
         connection.settimeout(CallControl.TIMEOUT)
         try:
             connection.connect((user.ip, user.tcp_port))
-        except ConnectionError:
+        except socket.error:
             self.video_client.display_message("Could not connect",
                                               f"Could not connect to {user.nick} at {user.ip}:{user.tcp_port}")
             with self.call_lock:
                 self._waiting = False
+
+            self.video_client.display_connect()
             return
         connection.send(f"CALLING {CurrentUser.currentUser.nick} {CurrentUser.currentUser.udp_port}".encode())
         try:
@@ -93,6 +96,7 @@ class CallControl:
             with self.call_lock:
                 self._waiting = False
 
+            self.video_client.display_connect()
             return
 
         with self.call_lock:
@@ -126,6 +130,7 @@ class CallControl:
         except (ValueError, IndexError):
             self.video_client.display_message("Error establishing connection",
                                               f"Error establishing connection with{user.nick}")
+            self.video_client.display_connect()
             connection.close()
 
     def call_start(self, nickname: str):
