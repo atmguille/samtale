@@ -231,10 +231,12 @@ class CallControl:
                 try:
                     response = self.call_socket.recv(BUFFER_SIZE)
                 except socket.error:
+                    self._call_end()
                     break
 
                 response = response.decode().split()
                 if not response:
+                    self._call_end()
                     break
                 if response[0] == "CALL_HOLD":
                     self.they_on_hold = True
