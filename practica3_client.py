@@ -117,8 +117,15 @@ class VideoClient(object):
         self.capture_thread.start()
         self.visualization_thread.start()
 
+        # Set end function to hung up call if X button is pressed
+        self.gui.setStopFunction(self.stop)
+
     def start(self):
         self.gui.go()
+
+    def stop(self) -> bool:
+        self.call_control.call_end()
+        return True
 
     def get_frame(self):
         success, frame = self.capture.read()
@@ -239,6 +246,18 @@ class VideoClient(object):
         self.last_remote_frame = None
         self.last_local_frame = None
         self.udp_buffer = UDPBuffer()
+
+    def display_calling(self, nick: str):
+        self.gui.setButton(VideoClient.CONNECT_BUTTON,
+                           f"Calling {nick}...")
+
+    def display_in_call(self, nick: str):
+        self.gui.setButton(VideoClient.CONNECT_BUTTON,
+                           f"In a call with {nick}")
+
+    def display_connect(self):
+        self.gui.setButton(VideoClient.CONNECT_BUTTON,
+                           VideoClient.CONNECT_BUTTON)
 
 
 if __name__ == '__main__':

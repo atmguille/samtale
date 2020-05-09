@@ -108,15 +108,18 @@ class CallControl:
                 self.call_thread.start()
                 with self.call_lock:
                     self._in_call = True
+                self.video_client.display_in_call(nickname)
             elif response[0] == "CALL_DENIED":
                 self.video_client.display_message("Call denied",
                                                   f"The user {user.nick} denied the call")
                 connection.close()
+                self.video_client.display_connect()
                 return
             elif response[0] == "CALL_BUSY":
                 self.video_client.display_message("User busy",
                                                   f"The user {user.nick} is already in a call")
                 connection.close()
+                self.video_client.display_connect()
                 return
             else:
                 raise ValueError()
@@ -139,6 +142,7 @@ class CallControl:
             return
 
         self._waiting = True
+        self.video_client.display_calling(nickname)
         self.call_lock.release()
 
         Thread(target=self._call_start, args=(nickname,), daemon=True).start()
@@ -151,6 +155,7 @@ class CallControl:
         self.sequence_number = 0
         self.video_client.flush_buffer()
         self.call_socket.close()
+        self.video_client.display_connect()
 
     # TODO: pasar a decorador, ver si es mejor mandar por UDP o un thread
     def call_end(self):
@@ -205,6 +210,7 @@ class CallControl:
                     answer = f"CALL_ACCEPTED {CurrentUser.currentUser.nick} {CurrentUser.currentUser.udp_port}".encode()
                     connection.send(answer)
                     self._in_call = True
+                    self.video_client.display_in_call(incoming_user.nick)
                     self.dst_user = incoming_user
                     self.call_socket = connection
                     self.call_thread = Thread(target=self.call_daemon, daemon=True)
