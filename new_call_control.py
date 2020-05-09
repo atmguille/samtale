@@ -228,6 +228,8 @@ class CallControl:
         while self.call_daemon_continue:
             try:
                 response = self.call_socket.recv(BUFFER_SIZE).decode().split()
+                if not response:
+                    break
                 if response[0] == "CALL_HOLD":
                     self.they_on_hold = True
                 elif response[0] == "CALL_RESUME":
@@ -237,7 +239,5 @@ class CallControl:
                                                       f"The user {self.dst_user.nick} has ended the call")
                     self._call_end()
                     return
-                else:
-                    break
             except (ValueError, IndexError) as e:
                 print(f"Error recieving information from client: {e}")
