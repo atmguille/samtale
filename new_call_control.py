@@ -253,4 +253,4 @@ class CallControl:
                                                       f"The user {self.dst_user.nick} has ended the call")
                     return
             except (ValueError, IndexError) as e:
-                print(f"Error recieving information from client: {e}")
+                print(f"Error receiving information from client: {e}")
