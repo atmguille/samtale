@@ -14,6 +14,7 @@ from new_call_control import CallControl
 from configuration import Configuration, ConfigurationStatus
 from discovery_server import list_users
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
+from user import CurrentUser
 
 MAX_DATAGRAM_SIZE = 65_507
 
@@ -79,7 +80,7 @@ class VideoClient(object):
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if self.configuration.status == ConfigurationStatus.LOADED:
-            self.receive_socket.bind(("0.0.0.0", self.configuration.udp_port))
+            self.receive_socket.bind(("0.0.0.0", CurrentUser().udp_port))
 
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
@@ -100,7 +101,7 @@ class VideoClient(object):
                             self.buttons_callback, row=1, column=1)
         self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
         if self.configuration.status == ConfigurationStatus.LOADED:
-            self.gui.setButton(VideoClient.REGISTER_BUTTON, self.configuration.nickname)
+            self.gui.setButton(VideoClient.REGISTER_BUTTON, CurrentUser().nick)
 
         self.users = {user.nick: user for user in list_users()}
         nicks = list(self.users.keys())
@@ -213,11 +214,11 @@ class VideoClient(object):
 
                 self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
             else:
-                ret = self.gui.okBox(f"Registered as {self.configuration.nickname}",
+                ret = self.gui.okBox(f"Registered as {CurrentUser().nick}",
                                      f"You are already registered:\n\n"
-                                     f" · nickname:\t{self.configuration.nickname}\n"
-                                     f" · TCP Port:\t{self.configuration.tcp_port}\n"
-                                     f" · UDP Port:\t{self.configuration.udp_port}\n\n"
+                                     f" · nickname:\t{CurrentUser().nick}\n"
+                                     f" · TCP Port:\t{CurrentUser().tcp_port}\n"
+                                     f" · UDP Port:\t{CurrentUser().udp_port}\n\n"
                                      f"Would you like to end your session? (this will delete your configuration file)")
                 if ret:
                     self.configuration.delete()
@@ -259,9 +260,9 @@ class VideoClient(object):
             self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
             self.display_message(title, message)
             if self.configuration.status == ConfigurationStatus.LOADED:
-                self.receive_socket.bind(("0.0.0.0", self.configuration.udp_port))
+                self.receive_socket.bind(("0.0.0.0", CurrentUser().udp_port))
                 self.call_control.control_thread.start()
-                self.gui.setButton(VideoClient.REGISTER_BUTTON, self.configuration.nickname)
+                self.gui.setButton(VideoClient.REGISTER_BUTTON, CurrentUser().nick)
 
     def incoming_call(self, username: str, ip: str) -> bool:
         accept = self.gui.yesNoBox("Incoming call",

@@ -87,11 +87,11 @@ class CallControl:
 
             self.video_client.display_connect()
             return
-        connection.send(f"CALLING {CurrentUser.currentUser.nick} {CurrentUser.currentUser.udp_port}".encode())
+        connection.send(f"CALLING {CurrentUser().nick} {CurrentUser().udp_port}".encode())
         try:
             response = connection.recv(CallControl.BUFFER_SIZE)
         except socket.timeout:
-            # This exception only happend if the other user does not answer to our call
+            # This exception only happened if the other user does not answer to our call
             self.video_client.display_message("Call not answered",
                                               f"The user {user.nick} did not answer the call")
             with self.call_lock:
@@ -165,15 +165,15 @@ class CallControl:
 
     # TODO: pasar a decorador, ver si es mejor mandar por UDP o un thread
     def call_end(self):
-        self.call_socket.send(f"CALL_END {CurrentUser.currentUser.nick}".encode())
+        self.call_socket.send(f"CALL_END {CurrentUser().nick}".encode())
         self._call_end()
 
     def call_hold(self):
-        Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser.currentUser.nick}".encode())).start()
+        Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser().nick}".encode())).start()
         self.we_on_hold = True
 
     def call_resume(self):
-        Thread(target=lambda: self.call_socket.send(f"CALL_RESUME {CurrentUser.currentUser.nick}".encode())).start()
+        Thread(target=lambda: self.call_socket.send(f"CALL_RESUME {CurrentUser().nick}".encode())).start()
         self.we_on_hold = False
 
     def control_daemon(self):
@@ -183,7 +183,7 @@ class CallControl:
         the user can interact with the call (deny it, ...)
         :return:
         """
-        sock = _open_tcp_socket(CurrentUser.currentUser)
+        sock = _open_tcp_socket(CurrentUser())
         sock.listen(1)
         while True:
             connection, client_address = sock.accept()
@@ -212,7 +212,7 @@ class CallControl:
                 accept = self.video_client.incoming_call(incoming_user.nick, incoming_user.ip)
                 self.call_lock.acquire()
                 if accept:
-                    answer = f"CALL_ACCEPTED {CurrentUser.currentUser.nick} {CurrentUser.currentUser.udp_port}".encode()
+                    answer = f"CALL_ACCEPTED {CurrentUser().nick} {CurrentUser().udp_port}".encode()
                     connection.send(answer)
                     self._in_call = True
                     self.video_client.display_in_call(incoming_user.nick)
@@ -221,10 +221,10 @@ class CallControl:
                     self.call_thread = Thread(target=self.call_daemon, daemon=True)
                     self.call_thread.start()
                 else:
-                    connection.send(f"CALL_DENIED {CurrentUser.currentUser.nick}".encode())
+                    connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
                 self.call_lock.release()
             except (ValueError, IndexError):
-                connection.send(f"CALL_DENIED {CurrentUser.currentUser.nick}".encode())
+                connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
                 self.call_lock.release()
 
     def call_daemon(self):

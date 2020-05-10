@@ -47,12 +47,12 @@ def _send(message: bytes, end_char: chr = None) -> str:
     return return_string
 
 
-def register(user: CurrentUser):
+def register():
     """
     Registers the current user in the system with the specified parameters
-    :param user
     :raise RegisterFailed
     """
+    user = CurrentUser()
     string_to_send = f"REGISTER {user.nick} {user.ip} {user.tcp_port} {user.password} {user.protocols}"
     response = _send(string_to_send.encode()).split()
     if response[0] == "NOK":

@@ -17,22 +17,19 @@ class Configuration:
         if self.config.read(Configuration.CONFIGURATION_FILENAME):
             # File was read successfully
             try:
-                self.nickname = self.config["Configuration"]["nickname"]
-                self.password = self.config["Configuration"]["password"]
-                self.tcp_port = int(self.config["Configuration"]["tcp_port"])
-                self.udp_port = int(self.config["Configuration"]["udp_port"])
+                nickname = self.config["Configuration"]["nickname"]
+                password = self.config["Configuration"]["password"]
+                tcp_port = int(self.config["Configuration"]["tcp_port"])
+                udp_port = int(self.config["Configuration"]["udp_port"])
 
-                CurrentUser(self.nickname, "V0", self.tcp_port, self.password, udp_port=self.udp_port)
+                CurrentUser(nickname, "V0", tcp_port, password, udp_port=udp_port)
                 # Check if the password is correct
                 try:
-                    register(CurrentUser.currentUser)
+                    register()
+                    self.status = ConfigurationStatus.LOADED
                 except RegisterFailed:
-                    CurrentUser.currentUser = None
                     self.status = ConfigurationStatus.WRONG_PASSWORD
-                    return
 
-                self.status = ConfigurationStatus.LOADED
-                return
             except KeyError:
                 # File is corrupted or has been tampered
                 self.status = ConfigurationStatus.WRONG_FILE
@@ -40,44 +37,32 @@ class Configuration:
             # No configuration file found
             self.status = ConfigurationStatus.NO_FILE
 
-        # The file wasn't read successfully or wasn't valid
-        self.nickname = None
-        self.password = None
-        self.tcp_port = None
-        self.udp_port = None
-
     def load(self, nickname: str,
              password: str,
              tcp_port: int,
              udp_port: int,
              persistent: bool = True) -> Tuple[str, str]:
-        self.nickname = nickname
-        self.password = password
-        self.tcp_port = tcp_port
-        self.udp_port = udp_port
-
-        CurrentUser(self.nickname, "V0", self.tcp_port, self.password, self.udp_port)
+        CurrentUser(nickname, "V0", tcp_port, password, udp_port)
         # Check if the password is correct
         try:
-            register(CurrentUser.currentUser)
+            register()
         except RegisterFailed:
-            CurrentUser.currentUser = None
             self.status = ConfigurationStatus.WRONG_PASSWORD
             return "Wrong Password", f"The provided password for {nickname} was not correct"
 
         self.status = ConfigurationStatus.LOADED
         if persistent:
             self.config["Configuration"] = {
-                "nickname": self.nickname,
-                "password": self.password,
-                "tcp_port": self.tcp_port,
-                "udp_port": self.udp_port
+                "nickname": nickname,
+                "password": password,
+                "tcp_port": tcp_port,
+                "udp_port": udp_port
             }
 
             with open(Configuration.CONFIGURATION_FILENAME, "w") as f:
                 self.config.write(f)
 
-        return "Registration successfully", f"You were registered successfully as {self.nickname}"
+        return "Registration successfully", f"You were registered successfully as {nickname}"
 
     @staticmethod
     def delete():

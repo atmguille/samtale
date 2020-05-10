@@ -1,5 +1,7 @@
 import requests
 
+from decorators import singleton
+
 currentUser = None
 
 
@@ -29,10 +31,12 @@ class User:
         self.udp_port = port
 
 
+@singleton
 class CurrentUser(User):
-    currentUser = None  # TODO
+    def __init__(self, nick: str, protocols: str, tcp_port: int, password: str, udp_port: int, ip: str = None):
+        """
 
-    def __init__(self, nick: str, protocols: str, tcp_port: int, password: str, udp_port: int = None, ip: str = None):
+        :rtype: object
+        """
         super().__init__(nick, protocols, tcp_port, udp_port=udp_port, ip=ip)
         self.password = password
-        CurrentUser.currentUser = self
