@@ -23,7 +23,8 @@ class VideoClient(object):
     REGISTER_SUBWINDOW = "Register"
     NICKNAME_WIDGET = "Nickname"
     PASSWORD_WIDGET = "Password"
-    PORT_WIDGET = "Port"
+    TCP_PORT_WIDGET = "TCP Port"
+    UDP_PORT_WIDGET = "UDP Port"
     SUBMIT_BUTTON = "Submit"
     VIDEO_WIDGET_NAME = "video"
     CONNECT_BUTTON = "Connect"
@@ -197,14 +198,16 @@ class VideoClient(object):
                     self.gui.setEntryDefault(VideoClient.NICKNAME_WIDGET, VideoClient.NICKNAME_WIDGET)
                     self.gui.addSecretEntry(VideoClient.PASSWORD_WIDGET)
                     self.gui.setEntryDefault(VideoClient.PASSWORD_WIDGET, VideoClient.PASSWORD_WIDGET)
-                    self.gui.addNumericEntry(VideoClient.PORT_WIDGET)
-                    self.gui.setEntryDefault(VideoClient.PORT_WIDGET, VideoClient.PORT_WIDGET)
+                    self.gui.addNumericEntry(VideoClient.TCP_PORT_WIDGET)
+                    self.gui.setEntryDefault(VideoClient.TCP_PORT_WIDGET, VideoClient.TCP_PORT_WIDGET)
+                    self.gui.addNumericEntry(VideoClient.UDP_PORT_WIDGET)
+                    self.gui.setEntryDefault(VideoClient.UDP_PORT_WIDGET, VideoClient.UDP_PORT_WIDGET)
 
-                    # Add the current configuration values if they are loaded
+                    # Add the current configuration values if they are loaded TODO: ahora es inutil
                     if self.configuration.is_loaded():
                         self.gui.setEntry(VideoClient.NICKNAME_WIDGET, self.configuration.nickname)
                         self.gui.setEntry(VideoClient.PASSWORD_WIDGET, self.configuration.password)
-                        self.gui.setEntry(VideoClient.PORT_WIDGET, self.configuration.control_port)
+                        self.gui.setEntry(VideoClient.TCP_PORT_WIDGET, self.configuration.tcp_port)
 
                     self.gui.addCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                     self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
@@ -218,7 +221,7 @@ class VideoClient(object):
                 ret = self.gui.okBox(f"Registered as {self.configuration.nickname}",
                                      f"You are already registered:\n\n"
                                      f" · nickname:\t{self.configuration.nickname}\n"
-                                     f" · TCP Port:\t{self.configuration.control_port}\n"
+                                     f" · TCP Port:\t{self.configuration.tcp_port}\n"
                                      f" · UDP Port:\t{self.configuration.udp_port}\n\n"
                                      f"Would you like to end your session? (this will delete your configuration file)")
                 if ret:
@@ -255,7 +258,8 @@ class VideoClient(object):
             persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
             title, message = self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_WIDGET),
                                                      self.gui.getEntry(VideoClient.PASSWORD_WIDGET),
-                                                     int(self.gui.getEntry(VideoClient.PORT_WIDGET)),
+                                                     int(self.gui.getEntry(VideoClient.TCP_PORT_WIDGET)),
+                                                     int(self.gui.getEntry(VideoClient.UDP_PORT_WIDGET)),
                                                      persistent=persistent)
             self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
             self.display_message(title, message)
