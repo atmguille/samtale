@@ -1,7 +1,12 @@
 import configparser
+from enum import Enum
+import os
+from typing import Tuple
 
 from discovery_server import register, RegisterFailed
 from user import CurrentUser
+
+ConfigurationStatus = Enum("ConfigurationStatus", ("LOADED", "WRONG_PASSWORD", "WRONG_FILE", "NO_FILE"))
 
 
 class Configuration:
@@ -25,27 +30,32 @@ class Configuration:
                     register(CurrentUser.currentUser)
                 except RegisterFailed:
                     CurrentUser.currentUser = None
-                    raise RegisterFailed
+                    self.status = ConfigurationStatus.WRONG_PASSWORD
+                    return
 
+                self.status = ConfigurationStatus.LOADED
                 return
             except KeyError:
                 # File is corrupted or has been tampered
-                pass
+                self.status = ConfigurationStatus.WRONG_FILE
+        else:
+            # No configuration file found
+            self.status = ConfigurationStatus.NO_FILE
 
-        # The file was not read successfully or file wasn't valid
+        # The file wasn't read successfully or wasn't valid
         self.nickname = None
         self.password = None
         self.control_port = None
         self.udp_port = Configuration.DEFAULT_UDP_PORT
 
     def is_loaded(self):
-        return self.nickname is not None
+        return self.status == ConfigurationStatus.LOADED
 
     def load(self, nickname: str,
              password: str,
              control_port: int,
              udp_port: int = DEFAULT_UDP_PORT,
-             persistent: bool = True):
+             persistent: bool = True) -> Tuple[str, str]:
         self.nickname = nickname
         self.password = password
         self.control_port = control_port
@@ -57,13 +67,24 @@ class Configuration:
             register(CurrentUser.currentUser)
         except RegisterFailed:
             CurrentUser.currentUser = None
-            raise RegisterFailed
+            self.status = ConfigurationStatus.WRONG_PASSWORD
+            return "Wrong Password", f"The provided password for {nickname} was not correct"
 
+        self.status = ConfigurationStatus.LOADED
         if persistent:
-            self.config["Configuration"]["nickname"] = self.nickname
-            self.config["Configuration"]["password"] = self.password
-            self.config["Configuration"]["control_port"] = str(self.control_port)
-            self.config["Configuration"]["udp_port"] = str(self.udp_port)
+            self.config["Configuration"] = {
+                "nickname": self.nickname,
+                "password": self.password,
+                "control_port": self.control_port,
+                "udp_port": self.udp_port
+            }
 
             with open(Configuration.CONFIGURATION_FILENAME, "w") as f:
                 self.config.write(f)
+
+        return "Registration successfully", f"You were registered successfully as {self.nickname}"
+
+    @staticmethod
+    def delete():
+        if os.path.exists(Configuration.CONFIGURATION_FILENAME):
+            os.remove(Configuration.CONFIGURATION_FILENAME)

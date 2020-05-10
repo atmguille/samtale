@@ -24,11 +24,12 @@ class CallControl:
     BUFFER_SIZE = 1024
     TIMEOUT = 30
 
-    def __init__(self, video_client):
+    def __init__(self, video_client, start_control_thread: bool):
         self.video_client = video_client
         # Control thread
         self.control_thread = Thread(target=self.control_daemon, daemon=True)
-        self.control_thread.start()
+        if start_control_thread:
+            self.control_thread.start()
         # Call
         self._in_call = False
         self._waiting = False

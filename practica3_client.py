@@ -11,8 +11,8 @@ from appJar import gui
 from appJar.appjar import ItemLookupError
 
 from new_call_control import CallControl
-from configuration import Configuration
-from discovery_server import list_users, RegisterFailed
+from configuration import Configuration, ConfigurationStatus
+from discovery_server import list_users
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 
 MAX_DATAGRAM_SIZE = 65_507
@@ -86,7 +86,6 @@ class VideoClient(object):
         # Get dimensions of the video stream
         self.video_width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.video_height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
         # Add widgets
         self.last_local_frame = self.get_frame()
         self.last_remote_frame = None
@@ -98,14 +97,19 @@ class VideoClient(object):
                              VideoClient.HOLD_RESUME_BUTTON],
                             self.buttons_callback, row=1, column=1)
         self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
+        if self.configuration.status == ConfigurationStatus.LOADED:
+            self.gui.setButton(VideoClient.REGISTER_BUTTON, self.configuration.nickname)
 
         self.users = {user.nick: user for user in list_users()}
         nicks = list(self.users.keys())
+        # self.gui.setStretch("both")
+        self.gui.setSticky("new")
         self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=0, column=0)
         self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback, row=1, column=0)
 
         # Initialize threads
-        self.call_control = CallControl(self)
+        start_control_thread = self.configuration.status == ConfigurationStatus.LOADED
+        self.call_control = CallControl(self, start_control_thread)
         self.video_semaphore = Semaphore()
         self.camera_buffer = Queue()
         self.udp_buffer = UDPBuffer()
@@ -183,32 +187,43 @@ class VideoClient(object):
                 pass
         """
         if name == VideoClient.REGISTER_BUTTON:
-            try:
-                # Load the register window
-                self.gui.startSubWindow(VideoClient.REGISTER_SUBWINDOW)
-                self.gui.setSize(300, 200)
+            if self.configuration.status != ConfigurationStatus.LOADED:
+                try:
+                    # Load the register window
+                    self.gui.startSubWindow(VideoClient.REGISTER_SUBWINDOW)
+                    self.gui.setSize(300, 200)
 
-                self.gui.addEntry(VideoClient.NICKNAME_WIDGET)
-                self.gui.setEntryDefault(VideoClient.NICKNAME_WIDGET, VideoClient.NICKNAME_WIDGET)
-                self.gui.addSecretEntry(VideoClient.PASSWORD_WIDGET)
-                self.gui.setEntryDefault(VideoClient.PASSWORD_WIDGET, VideoClient.PASSWORD_WIDGET)
-                self.gui.addNumericEntry(VideoClient.PORT_WIDGET)
-                self.gui.setEntryDefault(VideoClient.PORT_WIDGET, VideoClient.PORT_WIDGET)
+                    self.gui.addEntry(VideoClient.NICKNAME_WIDGET)
+                    self.gui.setEntryDefault(VideoClient.NICKNAME_WIDGET, VideoClient.NICKNAME_WIDGET)
+                    self.gui.addSecretEntry(VideoClient.PASSWORD_WIDGET)
+                    self.gui.setEntryDefault(VideoClient.PASSWORD_WIDGET, VideoClient.PASSWORD_WIDGET)
+                    self.gui.addNumericEntry(VideoClient.PORT_WIDGET)
+                    self.gui.setEntryDefault(VideoClient.PORT_WIDGET, VideoClient.PORT_WIDGET)
 
-                # Add the current configuration values if they are loaded
-                if self.configuration.is_loaded():
-                    self.gui.setEntry(VideoClient.NICKNAME_WIDGET, self.configuration.nickname)
-                    self.gui.setEntry(VideoClient.PASSWORD_WIDGET, self.configuration.password)
-                    self.gui.setEntry(VideoClient.PORT_WIDGET, self.configuration.control_port)
+                    # Add the current configuration values if they are loaded
+                    if self.configuration.is_loaded():
+                        self.gui.setEntry(VideoClient.NICKNAME_WIDGET, self.configuration.nickname)
+                        self.gui.setEntry(VideoClient.PASSWORD_WIDGET, self.configuration.password)
+                        self.gui.setEntry(VideoClient.PORT_WIDGET, self.configuration.control_port)
 
-                self.gui.addCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
-                self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
-                self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
-            except ItemLookupError:
-                # The register window has already been launched in the session
-                pass
+                    self.gui.addCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
+                    self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
+                    self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
+                except ItemLookupError:
+                    # The register window has already been launched in the session
+                    pass
 
-            self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
+                self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
+            else:
+                ret = self.gui.okBox(f"Registered as {self.configuration.nickname}",
+                                     f"You are already registered:\n\n"
+                                     f" · nickname:\t{self.configuration.nickname}\n"
+                                     f" · TCP Port:\t{self.configuration.control_port}\n"
+                                     f" · UDP Port:\t{self.configuration.udp_port}\n\n"
+                                     f"Would you like to end your session? (this will delete your configuration file)")
+                if ret:
+                    self.configuration.delete()
+                    self.gui.stop()
 
         elif name == VideoClient.HOLD_RESUME_BUTTON:
             if self.call_control.in_call():
@@ -219,23 +234,34 @@ class VideoClient(object):
                     self.call_control.call_resume()
                     self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
 
-            # TODO: intercambiar boton con resume y viceversa
         elif name == VideoClient.END_BUTTON:
             if self.call_control.in_call():
                 self.call_control.call_end()
         elif name == VideoClient.CONNECT_BUTTON:
-            self.call_control.call_start(self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET))
+            if self.configuration.status == ConfigurationStatus.LOADED:
+                self.call_control.call_start(self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET))
+            elif self.configuration.status == ConfigurationStatus.NO_FILE:
+                self.display_message("Registration needed",
+                                     "You have to register since no configuration.ini was found at program launch")
+            elif self.configuration.status == ConfigurationStatus.WRONG_PASSWORD:
+                self.display_message("Registration needed",
+                                     "You have to register again since the password provided in the configuration.ini "
+                                     "file was not correct")
+            elif self.configuration.status == ConfigurationStatus.WRONG_FILE:
+                self.display_message("Registration needed",
+                                     "You have to register again since an error occurred reading the configuration.ini "
+                                     "file")
         elif name == VideoClient.SUBMIT_BUTTON:
-            try:
-                persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
-                self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_WIDGET),
-                                        self.gui.getEntry(VideoClient.PASSWORD_WIDGET),
-                                        int(self.gui.getEntry(VideoClient.PORT_WIDGET)),
-                                        persistent=persistent)
-                self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
-            except RegisterFailed:
-                print("Register failed")
-                # TODO: notify the user
+            persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
+            title, message = self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_WIDGET),
+                                                     self.gui.getEntry(VideoClient.PASSWORD_WIDGET),
+                                                     int(self.gui.getEntry(VideoClient.PORT_WIDGET)),
+                                                     persistent=persistent)
+            self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
+            self.display_message(title, message)
+            if self.configuration.status == ConfigurationStatus.LOADED:
+                self.call_control.control_thread.start()
+                self.gui.setButton(VideoClient.REGISTER_BUTTON, self.configuration.nickname)
 
     def incoming_call(self, username: str, ip: str) -> bool:
         accept = self.gui.yesNoBox("Incoming call",
