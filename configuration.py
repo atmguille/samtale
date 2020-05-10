@@ -73,7 +73,7 @@ class Configuration:
             self.config["Configuration"] = {
                 "nickname": self.nickname,
                 "password": self.password,
-                "control_port": self.tcp_port,
+                "tcp_port": self.tcp_port,
                 "udp_port": self.udp_port
             }
 
