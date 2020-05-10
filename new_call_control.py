@@ -2,6 +2,7 @@ import socket
 from threading import Thread, Lock
 from typing import Optional, Tuple
 
+from decorators import run_in_thread
 from discovery_server import get_user, UserUnknown, BadUser
 from user import User, CurrentUser
 
@@ -163,18 +164,20 @@ class CallControl:
         self.call_socket.close()
         self.video_client.display_connect()
 
-    # TODO: pasar a decorador, ver si es mejor mandar por UDP o un thread
+    @run_in_thread
     def call_end(self):
         self.call_socket.send(f"CALL_END {CurrentUser().nick}".encode())
         self._call_end()
 
+    @run_in_thread
     def call_hold(self):
-        Thread(target=lambda: self.call_socket.send(f"CALL_HOLD {CurrentUser().nick}".encode())).start()
         self.we_on_hold = True
+        self.call_socket.send(f"CALL_HOLD {CurrentUser().nick}".encode())
 
+    @run_in_thread
     def call_resume(self):
-        Thread(target=lambda: self.call_socket.send(f"CALL_RESUME {CurrentUser().nick}".encode())).start()
         self.we_on_hold = False
+        self.call_socket.send(f"CALL_RESUME {CurrentUser().nick}".encode())
 
     def control_daemon(self):
         """

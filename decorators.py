@@ -1,4 +1,5 @@
 import signal
+from threading import Thread
 from timeit import default_timer
 
 
@@ -38,6 +39,14 @@ def timer(function):
 
     return _timeit
 
+
+def run_in_thread(function):
+    def _run_in_thread(*args, **kwargs):
+        Thread(target=function, args=args, kwargs=kwargs).start()
+        return
+
+    return _run_in_thread
+#
 
 def notify_timeout(milliseconds: int):
     def _timeout(function):
