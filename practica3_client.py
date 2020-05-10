@@ -78,7 +78,8 @@ class VideoClient(object):
 
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.receive_socket.bind(("0.0.0.0", self.configuration.udp_port))
+        if self.configuration.status == ConfigurationStatus.LOADED:
+            self.receive_socket.bind(("0.0.0.0", self.configuration.udp_port))
 
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
@@ -203,12 +204,6 @@ class VideoClient(object):
                     self.gui.addNumericEntry(VideoClient.UDP_PORT_WIDGET)
                     self.gui.setEntryDefault(VideoClient.UDP_PORT_WIDGET, VideoClient.UDP_PORT_WIDGET)
 
-                    # Add the current configuration values if they are loaded TODO: ahora es inutil
-                    if self.configuration.is_loaded():
-                        self.gui.setEntry(VideoClient.NICKNAME_WIDGET, self.configuration.nickname)
-                        self.gui.setEntry(VideoClient.PASSWORD_WIDGET, self.configuration.password)
-                        self.gui.setEntry(VideoClient.TCP_PORT_WIDGET, self.configuration.tcp_port)
-
                     self.gui.addCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                     self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                     self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
@@ -264,6 +259,7 @@ class VideoClient(object):
             self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
             self.display_message(title, message)
             if self.configuration.status == ConfigurationStatus.LOADED:
+                self.receive_socket.bind(("0.0.0.0", self.configuration.udp_port))
                 self.call_control.control_thread.start()
                 self.gui.setButton(VideoClient.REGISTER_BUTTON, self.configuration.nickname)
 
