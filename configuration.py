@@ -46,9 +46,6 @@ class Configuration:
         self.tcp_port = None
         self.udp_port = None
 
-    def is_loaded(self):
-        return self.status == ConfigurationStatus.LOADED
-
     def load(self, nickname: str,
              password: str,
              tcp_port: int,
