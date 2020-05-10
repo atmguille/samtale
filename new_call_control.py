@@ -208,7 +208,9 @@ class CallControl:
                                      ip=client_address[0],
                                      udp_port=int(response[2]))
                 connection.settimeout(None)  # The connection should not be closed until wanted
+                self.call_lock.release()
                 accept = self.video_client.incoming_call(incoming_user.nick, incoming_user.ip)
+                self.call_lock.acquire()
                 if accept:
                     answer = f"CALL_ACCEPTED {CurrentUser.currentUser.nick} {CurrentUser.currentUser.udp_port}".encode()
                     connection.send(answer)
