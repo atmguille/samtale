@@ -303,14 +303,22 @@ class VideoClient(object):
                 ret = self.gui.openBox(title="Select video file",
                                        dirName=getcwd(),
                                        multiple=False)
+                if not ret:
+                    return
                 try:
+                    capture = cv2.VideoCapture(ret)
+                    success, _ = capture.read()
+                    if not success:
+                        self.display_message("File not valid",
+                                             f"Could't open {ret} as a video file")
+                        return
                     with self.capture_lock:
-                        self.capture = cv2.VideoCapture(ret)
                         self.capture_mode = CaptureMode.VIDEO
-                        self.video_frame = 0
+                        self.capture = capture
+                        self.video_frame = 1
                         self.video_fps = self.capture.get(cv2.CAP_PROP_FPS)
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.CLEAR_VIDEO_BUTTON)
-                except Exception as e:
+                except FileNotFoundError as e:
                     print(e)
             else:
                 answer = self.gui.yesNoBox("Clear video",
