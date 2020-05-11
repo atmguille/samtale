@@ -74,7 +74,6 @@ class VideoClient:
             if self.call_control.should_video_flow():
 
                 if self.extreme_compression:
-                    print("MODO EXTREMO ACTIVADO")
                     video_width = VideoClient.VIDEO_WIDTH // 2
                     video_height = VideoClient.VIDEO_HEIGHT // 2
                     local_frame = cv2.resize(local_frame, (video_width, video_height))
