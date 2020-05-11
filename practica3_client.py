@@ -46,7 +46,6 @@ class VideoClient(object):
                     self.video_semaphore.release()
 
     def capture_and_send_video(self):
-
         while True:
             start_time = default_timer()
             # Fetch webcam frame

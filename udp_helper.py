@@ -1,4 +1,5 @@
 import time
+from timeit import default_timer
 from typing import Tuple
 from enum import Enum, auto
 from threading import Lock
@@ -53,7 +54,10 @@ class BufferQuality(Enum):
 
 
 class UDPBuffer:
-    MINIMUM_INITIAL_FRAMES = 0
+    MINIMUM_INITIAL_FRAMES = 5
+    U = 0.2
+    BUFFER_MAX = 5
+    CONSUME_SPEEDUP = 1.5
 
     def __init__(self):
         self._buffer = []
@@ -63,6 +67,8 @@ class UDPBuffer:
         self.__packages_lost = 0
         self.__delay_sum = 0
         self.__initial_frames = 0
+        self.__time_between_frames = 0
+        self.__last_consumed = None
 
     def insert(self, datagram: UDPDatagram) -> bool:
         """
@@ -77,7 +83,11 @@ class UDPBuffer:
             if datagram.seq_number < self.__last_seq_number:
                 return False
 
+            # Update time_between_frames
+            self.__time_between_frames = UDPBuffer.U*1/datagram.fps + (1 - UDPBuffer.U)*self.__time_between_frames
             buffer_len = len(self._buffer)
+            if buffer_len >= UDPBuffer.BUFFER_MAX:
+                self.__time_between_frames /= UDPBuffer.CONSUME_SPEEDUP
 
             if self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 self.__initial_frames += 1
@@ -119,8 +129,18 @@ class UDPBuffer:
         :return: consumed_datagram.data, quality
         """
         with self.__mutex:
+            now = default_timer()
+            if self.__last_consumed is not None and now - self.__last_consumed < self.__time_between_frames:
+                return bytes(), BufferQuality.MEDIUM
+
             if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
+                if self.__initial_frames >= UDPBuffer.MINIMUM_INITIAL_FRAMES:
+                    print("ASDFASDFASDFASDF")
+                    self.__last_seq_number += 1
                 return bytes(), BufferQuality.SUPER_LOW
+
+            # Update last time consumed
+            self.__last_consumed = now
 
             consumed_datagram = self._buffer.pop(0)
             self.__last_seq_number = consumed_datagram.seq_number
