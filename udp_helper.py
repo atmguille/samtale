@@ -5,9 +5,9 @@ from threading import Lock
 
 
 class UDPDatagram:
-    def __init__(self, seq_number: int, resolution: str, fps: float, data: bytes, ts: float = time.time()):
+    def __init__(self, seq_number: int, resolution: str, fps: float, data: bytes, ts: float = None):
         self.seq_number = seq_number
-        self.sent_ts = ts
+        self.sent_ts = ts if ts is not None else time.time()
         self.resolution = resolution
         self.fps = fps
         self.data = data
