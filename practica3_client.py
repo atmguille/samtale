@@ -35,6 +35,8 @@ class VideoClient:
     VIDEO_WIDTH = 640
     VIDEO_HEIGHT = 480
 
+    CONGESTED_INTERVAL = 30
+
     REMEMBER_USER_CHECKBOX = "Remember me"
     USE_PRIVATE_IP = "Use private ip?"
     REGISTER_SUBWINDOW = "Register"
@@ -210,6 +212,7 @@ class VideoClient:
     def display_video(self):
         # Do first acquire so next one is blocking
         self.video_semaphore.acquire()
+        last_congested = 0
         while True:
             self.video_semaphore.acquire()
             # Fetch webcam frame
@@ -220,8 +223,14 @@ class VideoClient:
                 local_frame = self.last_local_frame
             # Fetch remote frame
             remote_frame, quality = self.udp_buffer.consume()
-            if quality == BufferQuality.LOW and self.call_control.in_call():
+
+            now = default_timer()
+            if quality == BufferQuality.LOW and last_congested \
+                    and now - last_congested > VideoClient.CONGESTED_INTERVAL \
+                    and self.call_control.in_call():
+                last_congested = now
                 self.call_control.call_congested()
+
             if not remote_frame and self.call_control.in_call():
                 remote_frame = self.last_remote_frame
             # Show local (and remote) frame
