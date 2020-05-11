@@ -2,7 +2,7 @@ import time
 from timeit import default_timer
 from typing import Tuple
 from enum import Enum, auto
-from threading import Lock
+from threading import Lock, Semaphore, Thread
 
 
 class UDPDatagram:
@@ -22,6 +22,7 @@ class UDPDatagram:
         """
         self.received_ts = ts
         self.delay_ts = self.received_ts - self.sent_ts
+        print(f"Package delay: {self.delay_ts}")
 
     def __str__(self):
         return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#" + self.data.decode()
@@ -59,7 +60,7 @@ class UDPBuffer:
     BUFFER_MAX = 5
     CONSUME_SPEEDUP = 1.5
 
-    def __init__(self):
+    def __init__(self, display_video_semaphore: Semaphore):
         self._buffer = []
         self.__last_seq_number = -1
         self.__mutex = Lock()
@@ -69,6 +70,19 @@ class UDPBuffer:
         self.__initial_frames = 0
         self.__time_between_frames = 0
         self.__last_consumed = None
+        self.__waker_continue = True
+        self.display_video_semaphore = display_video_semaphore
+
+    def __del__(self):
+        self.__waker_continue = False
+
+    def wake_displayer(self):
+        """
+        Tells the displayer it should display video according to computed fps
+        """
+        while self.__waker_continue:
+            self.display_video_semaphore.release()
+            time.sleep(self.__time_between_frames)
 
     def insert(self, datagram: UDPDatagram) -> bool:
         """
@@ -91,6 +105,9 @@ class UDPBuffer:
 
             if self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 self.__initial_frames += 1
+                if self.__initial_frames == UDPBuffer.MINIMUM_INITIAL_FRAMES:
+                    # If we are ready to start playing, start the waker thread
+                    Thread(target=self.wake_displayer, daemon=True).start()
 
             # If buffer is currently empty
             if buffer_len == 0:
@@ -114,10 +131,13 @@ class UDPBuffer:
                     self.__delay_sum += datagram.delay_ts
                     self._buffer.insert(i + 1, datagram)
                     # Recompute buffer_quality TODO: pesos y score
-                    score = self.__packages_lost + 10 * (self.__delay_sum / (buffer_len + 1))
-                    if score < 10:
+                    score = self.__packages_lost + 100 * (self.__delay_sum / (buffer_len + 1))
+                    print(f"Paquetes perdidos {self.__packages_lost}")
+                    print(f"Delay sum {self.__delay_sum}")
+                    print(f"Score: {score}")
+                    if score < 5:
                         self._buffer_quality = BufferQuality.HIGH
-                    elif score < 100:
+                    elif score < 20:
                         self._buffer_quality = BufferQuality.MEDIUM
                     else:
                         self._buffer_quality = BufferQuality.LOW
@@ -135,7 +155,7 @@ class UDPBuffer:
 
             if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 if self.__initial_frames >= UDPBuffer.MINIMUM_INITIAL_FRAMES:
-                    print("ASDFASDFASDFASDF")
+                    # If we should have consumed but there is no data, skip that frame
                     self.__last_seq_number += 1
                 return bytes(), BufferQuality.SUPER_LOW
 
@@ -146,6 +166,7 @@ class UDPBuffer:
             self.__last_seq_number = consumed_datagram.seq_number
             self.__delay_sum -= consumed_datagram.delay_ts
             quality = self._buffer_quality
+            print(quality)
 
             if not self._buffer:
                 self._buffer_quality = BufferQuality.SUPER_LOW

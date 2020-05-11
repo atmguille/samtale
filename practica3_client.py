@@ -60,8 +60,7 @@ class VideoClient:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
             if self.call_control.should_video_flow() and addr[0] == self.call_control.get_send_address()[0]:
                 udp_datagram = udp_datagram_from_msg(data)
-                if self.udp_buffer.insert(udp_datagram):  # Release semaphore only is data was really inserted
-                    self.video_semaphore.release()
+                self.udp_buffer.insert(udp_datagram)
 
     def capture_and_send_video(self):
         while True:
@@ -148,7 +147,7 @@ class VideoClient:
         self.call_control = CallControl(self, start_control_thread)
         self.video_semaphore = Semaphore()
         self.camera_buffer = Queue()
-        self.udp_buffer = UDPBuffer()
+        self.udp_buffer = UDPBuffer(self.video_semaphore)
         self.receiving_thread = Thread(target=self.receive_video, daemon=True)
         self.capture_thread = Thread(target=self.capture_and_send_video, daemon=True)
         self.visualization_thread = Thread(target=self.display_video, daemon=True)
@@ -196,6 +195,8 @@ class VideoClient:
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
     def display_video(self):
+        # Do first acquire so next one is blocking
+        self.video_semaphore.acquire()
         while True:
             self.video_semaphore.acquire()
             # Fetch webcam frame
@@ -340,10 +341,9 @@ class VideoClient:
         self.gui.infoBox(title, message)
 
     def flush_buffer(self):
-        # TODO race condition on udpbuffer
         del self.udp_buffer
         self.last_remote_frame = None
-        self.udp_buffer = UDPBuffer()
+        self.udp_buffer = UDPBuffer(self.video_semaphore)
 
     def display_calling(self, nick: str):
         self.gui.setButton(VideoClient.CONNECT_BUTTON,
