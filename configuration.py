@@ -22,7 +22,7 @@ class Configuration:
                 tcp_port = int(self.config["Configuration"]["tcp_port"])
                 udp_port = int(self.config["Configuration"]["udp_port"])
 
-                CurrentUser(nickname, "V0", tcp_port, password, udp_port=udp_port)
+                CurrentUser(nickname, "V0#V1", tcp_port, password, udp_port=udp_port)
                 # Check if the password is correct
                 try:
                     register()
@@ -42,7 +42,7 @@ class Configuration:
              tcp_port: int,
              udp_port: int,
              persistent: bool = True) -> Tuple[str, str]:
-        CurrentUser(nickname, "V0", tcp_port, password, udp_port)
+        CurrentUser(nickname, "V0#V1", tcp_port, password, udp_port)
         # Check if the password is correct
         try:
             register()

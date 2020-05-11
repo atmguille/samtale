@@ -31,7 +31,10 @@ class User:
     def update_udp_port(self, port: int):
         self.udp_port = port
 
-    def get_best_common_protocol(self):
+    def get_best_common_protocol(self) -> str:
+        """
+        Returns best common protocol with the current user
+        """
         common_protocols = list(set(self.protocols).intersection(CurrentUser().protocols))
         best_protocol = sorted(common_protocols)[-1]
         return best_protocol
