@@ -25,7 +25,7 @@ MAX_DATAGRAM_SIZE = 65_507
 class CaptureMode(Enum):
     CAMERA = auto()
     VIDEO = auto()
-    NOT_SET = auto()
+    NO_CAMERA = auto()
 
 
 class VideoClient:
@@ -53,6 +53,8 @@ class VideoClient:
     CLEAR_VIDEO_BUTTON = "Clear video"
     TYPE_NICKNAME_LABEL = "Type nickname:"
 
+    NO_CAMERA_FPS = 30
+
     def receive_video(self):
         while True:
             data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
@@ -63,7 +65,6 @@ class VideoClient:
 
     def capture_and_send_video(self):
         while True:
-            start_time = default_timer()
             # Fetch webcam frame
             local_frame = self.get_frame()
             # Notify visualization thread
@@ -79,10 +80,9 @@ class VideoClient:
                 if sequence_number < 0:
                     continue
 
-                fps = round(1 / (default_timer() - start_time))
                 udp_datagram = UDPDatagram(sequence_number,
                                            f"{VideoClient.VIDEO_WIDTH}x{VideoClient.VIDEO_HEIGHT}",
-                                           fps,
+                                           self.fps,
                                            compressed_local_frame).encode()
 
                 assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
@@ -90,6 +90,8 @@ class VideoClient:
                 address = self.call_control.get_send_address()
                 if address:
                     self.send_socket.sendto(udp_datagram, address)
+
+            sleep(1 / self.fps)
 
     def __init__(self):
         self.gui = gui(VideoClient.APP_NAME, f"{VideoClient.APP_WIDTH}x{VideoClient.APP_HEIGHT}")
@@ -107,12 +109,14 @@ class VideoClient:
         self.capture_lock = Lock()
         self.capture_mode = CaptureMode.CAMERA
         # This will only be used in CaptureMode.VIDEO
-        self.video_frame = 0
-        self.video_fps = 0
+        self.video_current_frame = 0
 
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
-            raise Exception("No camera detected")
+            self.capture_mode = CaptureMode.NO_CAMERA
+            self.fps = VideoClient.NO_CAMERA_FPS
+        else:
+            self.fps = self.capture.get(cv2.CAP_PROP_FPS)
 
         # Add widgets
         self.last_local_frame = cv2.cvtColor(self.get_frame(), cv2.COLOR_BGR2RGB)
@@ -166,24 +170,23 @@ class VideoClient:
 
     def get_frame(self):
         with self.capture_lock:
-            success, frame = self.capture.read()
-            if not success:
-                raise Exception("Couldn't read video")
+            if self.capture_mode == CaptureMode.NO_CAMERA:
+                frame = cv2.imread("no_camera.bmp")
+            else:
+                success, frame = self.capture.read()
+                if not success:
+                    frame = cv2.imread("no_camera.bmp")
+                else:
+                    if self.capture_mode == CaptureMode.CAMERA:
+                        frame = cv2.flip(frame, 1)
+                    elif self.capture_mode == CaptureMode.VIDEO:
+                        self.video_current_frame += 1
 
-            if self.capture_mode == CaptureMode.CAMERA:
-                frame = cv2.flip(frame, 1)
-            elif self.capture_mode == CaptureMode.VIDEO:
-                self.video_frame += 1
+                        if self.video_current_frame == self.capture.get(cv2.CAP_PROP_FRAME_COUNT):
+                            self.video_current_frame = 0
+                            self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-                if self.video_frame == self.capture.get(cv2.CAP_PROP_FRAME_COUNT):
-                    self.video_frame = 0
-                    self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
-
-                sleep(1 / self.video_fps)
-
-            frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_AREA)
-
-            return frame
+            return cv2.resize(frame, (640, 480), interpolation=cv2.INTER_AREA)
 
     @staticmethod
     def get_image(frame):
@@ -221,18 +224,6 @@ class VideoClient:
                 self.show_video(local_frame)
 
     def buttons_callback(self, name: str):
-        """
-        if name == VideoClient.CONNECT_BUTTON:
-            remote_ip = self.gui.textBox("Connect", "Type the IP of the computer you want to connect to")
-            try:
-                IPv4Network(remote_ip)
-                user = User("qwerty", "V0", CONTROL_PORT, ip=remote_ip)
-                self.call_control = CallControl(user)
-                self.dispatcher.set_call_control(self.call_control)
-                self.call_control.call_start()
-            except ValueError:
-                pass
-        """
         if name == VideoClient.REGISTER_BUTTON:
             if self.configuration.status != ConfigurationStatus.LOADED:
                 try:
@@ -324,8 +315,8 @@ class VideoClient:
                     with self.capture_lock:
                         self.capture_mode = CaptureMode.VIDEO
                         self.capture = capture
-                        self.video_frame = 1
-                        self.video_fps = self.capture.get(cv2.CAP_PROP_FPS)
+                        self.video_current_frame = 1
+                        self.fps = self.capture.get(cv2.CAP_PROP_FPS)
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.CLEAR_VIDEO_BUTTON)
                 except FileNotFoundError as e:
                     print(e)
@@ -336,6 +327,7 @@ class VideoClient:
                     with self.capture_lock:
                         self.capture = cv2.VideoCapture(0)
                         self.capture_mode = CaptureMode.CAMERA
+                        self.fps = self.capture.get(cv2.CAP_PROP_FPS)
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.SELECT_VIDEO_BUTTON)
 
     def incoming_call(self, username: str, ip: str) -> bool:
@@ -351,7 +343,6 @@ class VideoClient:
         # TODO race condition on udpbuffer
         del self.udp_buffer
         self.last_remote_frame = None
-        self.last_local_frame = None
         self.udp_buffer = UDPBuffer()
 
     def display_calling(self, nick: str):
