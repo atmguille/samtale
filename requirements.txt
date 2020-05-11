@@ -1,0 +1,5 @@
+appJar
+Pillow
+numpy
+opencv-python
+requests
