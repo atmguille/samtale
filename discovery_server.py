@@ -26,10 +26,10 @@ def _send(message: bytes, end_char: chr = None) -> str:
     """
     Sends a message to the Discovery Server
     :param message: message encoded in bytes to be sent
-    :return: response of the server TODO: type
+    :return: response of the server
     """
     return_string = ""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:  # TODO: organizar según conveniencia
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
         connection.connect((socket.gethostbyname(server_hostname), server_port))
         connection.send(message)
         response = connection.recv(BUFFER_SIZE)
@@ -77,7 +77,7 @@ def get_user(nick: str) -> User:
             raise BadUser(nick)
 
 
-def list_users() -> List[User]:  # TODO: de verdad esto puede devolver NOK? TODO: devuelve ts en vez de protocols: PROTESTAR
+def list_users() -> List[User]:
     """
     Gets a list of all the users
     :return: list of users.
@@ -95,7 +95,8 @@ def list_users() -> List[User]:  # TODO: de verdad esto puede devolver NOK? TODO
     users = []
     for user in users_splitted:
         try:
-            users.append(User(nick=user[0], ip=user[1], tcp_port=int(float(user[2])), protocols=user[3]))
+            # Protocols is not answered by the server, ts instead. Since we do not use the info, we set it to V0
+            users.append(User(nick=user[0], ip=user[1], tcp_port=int(float(user[2])), protocols="V0"))
         except Exception as e:
             print(f"Error parsing user: {e}")
             pass
