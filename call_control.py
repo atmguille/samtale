@@ -1,158 +1,13 @@
 import socket
-import threading
-from threading import Lock
-from time import sleep
-from typing import Tuple, Optional
+from threading import Thread, Lock
+from typing import Optional, Tuple
+from timeit import default_timer
 
+from decorators import run_in_thread
+from discovery_server import get_user, UserUnknown, BadUser
 from user import User, CurrentUser
 
-BUFFER_SIZE = 50  # TODO: espero que nadie tenga un nick demasiado largo
-
-
-class CallDenied(Exception):
-    def __init__(self, nick: str):
-        message = f"User {nick} denied our call"
-        super().__init__(message)
-
-
-class CallBusy(Exception):
-    def __init__(self, nick: str):
-        message = f"User {nick} is currently in a call. Please try later"
-        super().__init__(message)
-
-
-def _create_tcp_connection(dst_user: User) -> socket:
-    """
-    Creates a tcp connection
-    :param dst_user: user to create the connection with. ip and tcp_port will be gathered from it
-    :return: created connection
-    """
-    connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    connection.connect((dst_user.ip, dst_user.tcp_port))
-    return connection
-
-
-class CallControl:
-    def __init__(self, dst_user: User, display_message_callback, flush_buffer_callback, destroy,
-                 connection: socket = None):
-        self.__initialized = False
-        self.src_user = CurrentUser.currentUser
-        self.dst_user = dst_user
-        self.connection = connection if connection is not None else _create_tcp_connection(dst_user)
-        self._listener = threading.Thread(target=self._listen, daemon=True)
-        self.__listener_stop = False
-        self.sequence_number = 0
-        self.display_message_callback = display_message_callback
-        self.flush_buffer_callback = flush_buffer_callback
-        self.destroy = destroy
-        # These two variables are needed in case both of the users hold the call.
-        # Only if both of them are not in "hold", the call can continue
-        self.own_hold = True  # If call is held by us
-        self.foreign_hold = False  # If call is held by the other user
-        self.__initialized = True
-
-    def __del__(self):
-        if self.__initialized:
-            self.connection.close()
-            self.__listener_stop = True
-            try:
-                self._listener.join()
-            except RuntimeError:
-                pass
-
-    def should_video_flow(self):
-        return not (self.own_hold or self.foreign_hold)
-
-    def _listen(self):
-        """
-        Function that is executed by the listener. Checks if the call must be held, resumed or ended
-        """
-        # TODO: informar a la interfaz de lo que va pasando
-        is_valid_connection = False
-        while not self.__listener_stop:
-            try:
-                response = self.connection.recv(BUFFER_SIZE).decode().split()
-            except socket.timeout:  # This exception may only happen if the other user does not answer to our call
-                title = "Call not answered"
-                message = f"The user {self.dst_user.nick} did not answer the call"
-                self.display_message_callback(title, message)
-                self.destroy()
-                break
-            if response:
-                is_valid_connection = True
-                if response[0] == "CALL_ACCEPTED":
-                    self.dst_user.update_udp_port(int(response[2]))
-                    self.connection.settimeout(None)  # The connection should not be closed until wanted
-                    self.own_hold = False  # Start sending video
-                elif response[0] == "CALL_DENIED":
-                    title = "Call denied"
-                    message = f"The user {self.dst_user.nick} denied the call"
-                    self.display_message_callback(title, message)
-                    self.destroy()
-                    break
-                elif response[0] == "CALL_BUSY":
-                    title = "User busy"
-                    message = f"The user {self.dst_user.nick} is already in a call"
-                    self.display_message_callback(title, message)
-                    self.destroy()
-                    break
-                elif response[0] == "CALL_HOLD":
-                    self.foreign_hold = True
-                elif response[0] == "CALL_RESUME":
-                    self.foreign_hold = False
-                elif response[0] == "CALL_END":
-                    title = "Call ended"
-                    message = f"The user {self.dst_user.nick} has ended the call"
-                    self.display_message_callback(title, message)
-                    self.flush_buffer_callback()
-                    self.destroy()
-                    break
-            elif not is_valid_connection:
-                title = "Call timed out"
-                message = f"The user {self.dst_user.nick} was tired of waiting for you"
-                self.display_message_callback(title, message)
-                self.destroy()
-                break
-            else:
-                break
-
-    def call_start(self):
-        """
-        Calls the user and runs listener thread
-        """
-        string_to_send = f"CALLING {self.src_user.nick} {self.src_user.udp_port}"
-        self.connection.send(string_to_send.encode())
-        self.connection.settimeout(
-            30)  # Sets timeout long enough so the user is able to answer TODO: 30 segs es mucho o poco???
-        self._listener.start()
-
-    def call_accept(self):
-        """
-        Accepts the call, sending the other user the corresponding command and running the listener thread
-        :return:
-        """
-        string_to_send = f"CALL_ACCEPTED {self.src_user.nick} {self.src_user.udp_port}"
-        self.connection.send(string_to_send.encode())
-        self.own_hold = False  # Start sending video
-        self._listener.start()
-
-    def call_deny(self):
-        string_to_send = f"CALL_DENIED {self.src_user.nick}"
-        self.connection.send(string_to_send.encode())
-
-    def call_hold(self):
-        self.own_hold = True
-        string_to_send = f"CALL_HOLD {self.src_user.nick}"
-        self.connection.send(string_to_send.encode())
-
-    def call_resume(self):
-        self.own_hold = False
-        string_to_send = f"CALL_RESUME {self.src_user.nick}"
-        self.connection.send(string_to_send.encode())
-
-    def call_end(self):
-        string_to_send = f"CALL_END {self.src_user.nick}"
-        self.connection.send(string_to_send.encode())
+BUFFER_SIZE = 1024
 
 
 def _open_tcp_socket(src_user: User) -> socket:
@@ -167,148 +22,267 @@ def _open_tcp_socket(src_user: User) -> socket:
     return sock
 
 
-class ControlDispatcher:
-    def __init__(self, incoming_callback, display_message_callback, flush_buffer_callback):
-        # TODO: this shouldn't fail if the current user is not created yet
-        self.src_user = CurrentUser.currentUser
-        self.sock = _open_tcp_socket(self.src_user)
-        self.current_call_control = None
-        self.__idle = True
-        self.__idle_lock = Lock()
-        self.__call_control_lock = Lock()
-        self._listener = threading.Thread(target=self._listen, daemon=True)
-        self.__listener_stop = False
-        self.incoming_callback = incoming_callback
-        self.display_callback = display_message_callback
-        self.flush_buffer_callback = flush_buffer_callback
-        self._listener.start()
+class CallControl:
+    BUFFER_SIZE = 1024
+    TIMEOUT = 30
+    CONGESTED_INTERVAL = 60
 
-    def __del__(self):
-        self.__listener_stop = True
-        self._listener.join()
-        if self.current_call_control:
-            del self.current_call_control
+    def __init__(self, video_client, start_control_thread: bool):
+        self.video_client = video_client
+        # Control thread
+        self.control_thread = Thread(target=self.control_daemon, daemon=True)
+        if start_control_thread:
+            self.control_thread.start()
+        # Call
+        self._in_call = False
+        self._waiting = False
+        self.we_on_hold = False
+        self.they_on_hold = False
+        self.sequence_number = 0
+        self.protocol = None
+        self.call_lock = Lock()
+        self.dst_user: Optional[User] = None
+        self.call_socket: Optional[socket] = None
+        self.call_thread: Optional[Thread] = None
 
     def in_call(self) -> bool:
-        return self.current_call_control is not None
+        with self.call_lock:
+            return self._in_call
 
-    def call_hold(self):
-        with self.__call_control_lock:
-            if self.current_call_control:
-                self.current_call_control.call_hold()
+    def waiting(self) -> bool:
+        with self.call_lock:
+            return self._waiting
 
-    def call_resume(self):
-        with self.__call_control_lock:
-            if self.current_call_control:
-                self.current_call_control.call_resume()
+    def should_video_flow(self) -> bool:
+        return self.in_call() and not (self.we_on_hold or self.they_on_hold)
 
-    def call_end(self):
-        with self.__call_control_lock:
-            if self.current_call_control:
-                self.current_call_control.call_end()
-                del self.current_call_control
-                self.current_call_control = None
-                with self.__idle_lock:
-                    self.__idle = True
+    def get_sequence_number(self) -> int:
+        if self.in_call():
+            self.sequence_number += 1
+            return self.sequence_number
 
-    def call_start(self, user: User):
-        # Unify call control and set_call_control
-        with self.__idle_lock:
-            if self.__idle:
-                self.__idle = False
-            else:
-                self.display_callback("You're already in a call", "You're already in a call")
+        return -1
+
+    def get_send_address(self) -> Tuple[str, int]:
+        return self.dst_user.ip, self.dst_user.udp_port
+
+    def _call_start(self, nickname: str):
+        # Fetch user from server
+        try:
+            user = get_user(nickname)
+        except (UserUnknown, BadUser) as e:
+            with self.call_lock:
+                self._waiting = False
+
+            self.video_client.display_connect()
+            self.video_client.display_message("Error fetching user", str(e))
+            return
+
+        # Call user
+        connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        connection.settimeout(CallControl.TIMEOUT)
+        try:
+            connection.connect((user.ip, user.tcp_port))
+        except socket.error:
+            self.video_client.display_message("Could not connect",
+                                              f"Could not connect to {user.nick} at {user.ip}:{user.tcp_port}")
+            with self.call_lock:
+                self._waiting = False
+
+            self.video_client.display_connect()
+            return
+
+        calling_str = f"CALLING {CurrentUser().nick} {CurrentUser().udp_port}"
+        self.protocol = user.get_best_common_protocol()
+        # If common protocol is greater than V0, append protocol to CALLING
+        if self.protocol != "V0":
+            calling_str += f" {self.protocol}"
+
+        connection.send(calling_str.encode())
+        try:
+            response = connection.recv(CallControl.BUFFER_SIZE)
+        except socket.timeout:
+            # This exception only happened if the other user does not answer to our call
+            self.video_client.display_message("Call not answered",
+                                              f"The user {user.nick} did not answer the call")
+            with self.call_lock:
+                self._waiting = False
+
+            self.video_client.display_connect()
+            return
+
+        with self.call_lock:
+            self._waiting = False
+        try:
+            response = response.decode().split()
+            if response[0] == "CALL_ACCEPTED":
+                self.dst_user = user
+                self.dst_user.update_udp_port(int(response[2]))
+                connection.settimeout(None)  # The connection should not be closed until wanted
+                self.call_socket = connection
+                self.call_thread = Thread(target=self.call_daemon)
+                self.call_thread.start()
+                with self.call_lock:
+                    self._in_call = True
+                self.video_client.display_in_call(nickname)
+            elif response[0] == "CALL_DENIED":
+                self.video_client.display_message("Call denied",
+                                                  f"The user {user.nick} denied the call")
+                connection.close()
+                self.video_client.display_connect()
                 return
-
-        with self.__call_control_lock:
-            try:
-                self.current_call_control = CallControl(user,
-                                                        self.display_callback,
-                                                        self.flush_buffer_callback,
-                                                        self.destroy_current_call)
-
-                self.current_call_control.call_start()
-            except (ConnectionRefusedError, OSError):
-                title = "Connection error"
-                message = f"Could not connect to user {user.nick} on {user.ip}:{user.tcp_port}"
-                self.display_callback(title, message)
-                with self.__idle_lock:
-                    self.__idle = True
-
-    def should_video_flow(self):
-        success = self.__call_control_lock.acquire(blocking=False)
-        if success:
-            return_value = self.current_call_control and self.current_call_control.should_video_flow()
-            self.__call_control_lock.release()
-            return return_value
-
-        return False
-
-    def get_send_address(self) -> Optional[Tuple[str, int]]:
-        with self.__call_control_lock:
-            if self.current_call_control:
-                return self.current_call_control.dst_user.ip, self.current_call_control.dst_user.udp_port
+            elif response[0] == "CALL_BUSY":
+                self.video_client.display_message("User busy",
+                                                  f"The user {user.nick} is already in a call")
+                connection.close()
+                self.video_client.display_connect()
+                return
             else:
-                return None
+                raise ValueError()
+        except (ValueError, IndexError):
+            self.video_client.display_message("Error establishing connection",
+                                              f"Error establishing connection with{user.nick}")
+            self.video_client.display_connect()
+            connection.close()
 
-    def get_sequence_number(self):
-        with self.__call_control_lock:
-            if self.current_call_control:
-                sequence_number = self.current_call_control.sequence_number
-                self.current_call_control.sequence_number += 1
-                return sequence_number
-            return -1
+    def call_start(self, nickname: str):
+        self.call_lock.acquire()
+        if self._in_call:
+            self.call_lock.release()
+            self.video_client.display_message("You are in a call",
+                                              "You have to hang up in order to make a new call")
+            return
+        elif self._waiting:
+            self.call_lock.release()
+            self.video_client.display_message("You are making a call",
+                                              "You have to cancel it in order to make a new call")
+            return
 
-    def destroy_current_call(self):
-        with self.__call_control_lock:
-            if self.current_call_control:
-                del self.current_call_control
-                self.current_call_control = None
-                with self.__idle_lock:
-                    self.__idle = True
+        self._waiting = True
+        self.video_client.display_calling(nickname)
+        self.call_lock.release()
 
-    def _listen(self):
+        Thread(target=self._call_start, args=(nickname,), daemon=True).start()
+
+    def _call_end(self):
+        self._in_call = False
+        self._waiting = False
+        self.we_on_hold = False
+        self.they_on_hold = False
+        self.sequence_number = 0
+        self.protocol = None
+        self.video_client.flush_buffer()
+        self.call_socket.close()
+        self.video_client.display_connect()
+
+    @run_in_thread
+    def call_end(self):
+        self.call_socket.send(f"CALL_END {CurrentUser().nick}".encode())
+        self._call_end()
+
+    @run_in_thread
+    def call_hold(self):
+        self.we_on_hold = True
+        self.call_socket.send(f"CALL_HOLD {CurrentUser().nick}".encode())
+
+    @run_in_thread
+    def call_resume(self):
+        self.we_on_hold = False
+        self.call_socket.send(f"CALL_RESUME {CurrentUser().nick}".encode())
+
+    @run_in_thread
+    def call_congested(self):
+        # All protocols different to V0 should support this
+        if self.protocol != "V0":
+            self.call_socket.send(f"CALL_CONGESTED {CurrentUser().nick}".encode())
+
+    def control_daemon(self):
         """
         Function executed by the listener, checking if someone is calling us. If we are already in a call,
         it answers CALL_BUSY to the incoming user. If we are available, builds a new CallControl, where
         the user can interact with the call (deny it, ...)
         :return:
         """
-        self.sock.listen(1)
-        while not self.__listener_stop:
-            connection, client_address = self.sock.accept()
+        sock = _open_tcp_socket(CurrentUser())
+        sock.listen(1)
+        while True:
+            connection, client_address = sock.accept()
             connection.settimeout(3)
 
             try:
                 response = connection.recv(BUFFER_SIZE).decode().split()
 
-                with self.__idle_lock:
-                    if not self.__idle:
-                        connection.send("CALL_BUSY".encode())
-                        self.display_callback(f"{response[1]} called you",
-                                              f"{response[1]} called you")
-                        continue
+                self.call_lock.acquire()
+                if self._in_call or self._waiting:
+                    self.call_lock.release()
+                    connection.send("CALL_BUSY".encode())
+                    self.video_client.display_message(f"{response[1]} called you", f"{response[1]} called you")
+                    continue
 
-                with self.__call_control_lock:  # Block call control until resolving request
+                if response[0] != "CALLING":
+                    raise Exception("Error in received string")
 
-                    if response[0] != "CALLING":
-                        raise Exception("Error in received string")
+                self.protocol = response[3] if len(response) > 3 else "V0"
 
-                    incoming_user = User(nick=response[1],
-                                         protocols="V0",  # TODO: sería maravilloso que viniera en el CALLING
-                                         tcp_port=client_address[1],
-                                         ip=client_address[0],
-                                         udp_port=int(response[2]))
-                    connection.settimeout(None)  # The connection should not be closed until wanted
-                    self.current_call_control = CallControl(incoming_user, self.display_callback,
-                                                            self.flush_buffer_callback,
-                                                            self.destroy_current_call, connection=connection)
-                    accept = self.incoming_callback(incoming_user.nick, incoming_user.ip)
-                    if accept:
-                        self.current_call_control.call_accept()
-                    else:
-                        self.current_call_control.call_deny()
-                        del self.current_call_control
-                        self.current_call_control = None
-            except:
-                connection.send(f"CALL_DENIED {self.src_user.nick}".encode())
+                incoming_user = User(nick=response[1],
+                                     # If V1 or +, CALLING has the protocol to be used in last argument
+                                     protocols=self.protocol,
+                                     tcp_port=client_address[1],
+                                     ip=client_address[0],
+                                     udp_port=int(response[2]))
+                connection.settimeout(None)  # The connection should not be closed until wanted
+                self.call_lock.release()
+                accept = self.video_client.incoming_call(incoming_user.nick, incoming_user.ip)
+                self.call_lock.acquire()
+                if accept:
+                    answer = f"CALL_ACCEPTED {CurrentUser().nick} {CurrentUser().udp_port}".encode()
+                    connection.send(answer)
+                    self._in_call = True
+                    self.video_client.display_in_call(incoming_user.nick)
+                    self.dst_user = incoming_user
+                    self.call_socket = connection
+                    self.call_thread = Thread(target=self.call_daemon, daemon=True)
+                    self.call_thread.start()
+                else:
+                    connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
+                self.call_lock.release()
+            except (ValueError, IndexError):
+                connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
+                self.call_lock.release()
+
+    def call_daemon(self):
+        """
+        Function that is executed by the listener. Checks if the call must be held, resumed or ended
+        """
+
+        last_congested = 0
+
+        while True:
+            if self.protocol != "V0":
+                if last_congested and default_timer() - last_congested > CallControl.CONGESTED_INTERVAL:
+                    self.video_client.extreme_compression = False
+
+            try:
+                response = self.call_socket.recv(BUFFER_SIZE)
+            except socket.error:
+                self._call_end()
+                break
+            try:
+                response = response.decode().split()
+                if not response:
+                    self._call_end()
+                    break
+                if response[0] == "CALL_HOLD":
+                    self.they_on_hold = True
+                elif response[0] == "CALL_RESUME":
+                    self.they_on_hold = False
+                elif self.protocol != "V0" and response[0] == "CALL_CONGESTED":
+                    last_congested = default_timer()
+                    self.video_client.extreme_compression = True
+                elif response[0] == "CALL_END":
+                    self._call_end()
+                    self.video_client.display_message("Call ended",
+                                                      f"The user {self.dst_user.nick} has ended the call")
+                    break
+            except (ValueError, IndexError) as e:
+                print(f"Error receiving information from client: {e}")
