@@ -2,7 +2,7 @@ import time
 from timeit import default_timer
 from typing import Tuple
 from enum import Enum, auto
-from threading import Lock
+from threading import Lock, Semaphore, Thread
 
 
 class UDPDatagram:
@@ -59,7 +59,7 @@ class UDPBuffer:
     BUFFER_MAX = 5
     CONSUME_SPEEDUP = 1.5
 
-    def __init__(self):
+    def __init__(self, display_video_semaphore: Semaphore):
         self._buffer = []
         self.__last_seq_number = -1
         self.__mutex = Lock()
@@ -69,6 +69,21 @@ class UDPBuffer:
         self.__initial_frames = 0
         self.__time_between_frames = 0
         self.__last_consumed = None
+        self.__waker_continue = True
+        Thread(target=self.wake_displayer, args=(display_video_semaphore,), daemon=True).start()
+
+    def __del__(self):
+        self.__waker_continue = False
+
+    def wake_displayer(self, semaphore: Semaphore):
+        """
+        Tells the displayer it should display video according to computed fps
+        :param semaphore: semaphore to release every time_between_frames seconds
+        """
+        while self.__waker_continue:
+            if self.__initial_frames >= UDPBuffer.MINIMUM_INITIAL_FRAMES:
+                semaphore.release()
+                time.sleep(self.__time_between_frames)
 
     def insert(self, datagram: UDPDatagram) -> bool:
         """
@@ -135,7 +150,7 @@ class UDPBuffer:
 
             if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 if self.__initial_frames >= UDPBuffer.MINIMUM_INITIAL_FRAMES:
-                    print("ASDFASDFASDFASDF")
+                    # If we should have consumed but there is no data, skip that frame
                     self.__last_seq_number += 1
                 return bytes(), BufferQuality.SUPER_LOW
 
