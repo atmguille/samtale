@@ -13,7 +13,7 @@ from appJar.appjar import ItemLookupError
 from new_call_control import CallControl
 from configuration import Configuration, ConfigurationStatus
 from discovery_server import list_users
-from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
+from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram, BufferQuality
 from user import CurrentUser
 
 MAX_DATAGRAM_SIZE = 65_507
@@ -160,6 +160,8 @@ class VideoClient(object):
                 local_frame = self.last_local_frame
             # Fetch remote frame
             remote_frame, quality = self.udp_buffer.consume()
+            if quality == BufferQuality.LOW and self.call_control.in_call():
+                self.call_control.call_congested()
             if not remote_frame and self.call_control.in_call():
                 remote_frame = self.last_remote_frame
             # Show local (and remote) frame

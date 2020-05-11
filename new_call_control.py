@@ -179,6 +179,10 @@ class CallControl:
         self.we_on_hold = False
         self.call_socket.send(f"CALL_RESUME {CurrentUser().nick}".encode())
 
+    @run_in_thread
+    def call_congested(self):
+        self.call_socket.send(f"CALL_CONGESTED {CurrentUser().nick}".encode())
+
     def control_daemon(self):
         """
         Function executed by the listener, checking if someone is calling us. If we are already in a call,
@@ -250,10 +254,12 @@ class CallControl:
                     self.they_on_hold = True
                 elif response[0] == "CALL_RESUME":
                     self.they_on_hold = False
+                elif response[0] == "CALL_CONGESTED":
+                    pass
                 elif response[0] == "CALL_END":
                     self._call_end()
                     self.video_client.display_message("Call ended",
                                                       f"The user {self.dst_user.nick} has ended the call")
-                    return
+                    break
             except (ValueError, IndexError) as e:
                 print(f"Error receiving information from client: {e}")
