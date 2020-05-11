@@ -63,7 +63,7 @@ class VideoClient(object):
                     continue
 
                 fps = round(1/(default_timer() - start_time))
-                print(fps)
+                #print(fps)  # TODO: lo hace bien???
                 udp_datagram = UDPDatagram(sequence_number,
                                            f"{self.video_width}x{self.video_height}",
                                            fps,
@@ -154,6 +154,8 @@ class VideoClient(object):
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
     def display_video(self):
+        # Do first acquire so next one is blocking
+        self.video_semaphore.acquire()
         while True:
             self.video_semaphore.acquire()
             # Fetch webcam frame
@@ -281,7 +283,6 @@ class VideoClient(object):
     def flush_buffer(self):
         del self.udp_buffer
         self.last_remote_frame = None
-        self.last_local_frame = None
         self.udp_buffer = UDPBuffer(self.video_semaphore)
 
     def display_calling(self, nick: str):
