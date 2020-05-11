@@ -1,4 +1,4 @@
-from time import sleep
+from time import sleep, time
 from timeit import default_timer
 from typing import Tuple
 from enum import Enum, auto
@@ -8,7 +8,7 @@ from threading import Lock, Semaphore, Thread
 class UDPDatagram:
     def __init__(self, seq_number: int, resolution: str, fps: float, data: bytes, ts: float = None):
         self.seq_number = seq_number
-        self.sent_ts = ts if ts is not None else default_timer()
+        self.sent_ts = ts if ts is not None else time()
         self.resolution = resolution
         self.fps = fps
         self.data = data
@@ -19,7 +19,7 @@ class UDPDatagram:
         """
         Sets received time and computes datagram delay
         """
-        self.received_ts = default_timer()
+        self.received_ts = time()
         self.delay_ts = self.received_ts - self.sent_ts
         print(f"Package delay: {self.delay_ts}")
 
