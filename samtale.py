@@ -130,7 +130,7 @@ class VideoClient:
             self.capture_mode = CaptureMode.NO_CAMERA
             self.fps = VideoClient.NO_CAMERA_FPS
         else:
-            self.fps = self.capture.get(cv2.CAP_PROP_FPS)
+            self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
 
         # Add widgets
         self.last_local_frame = cv2.cvtColor(self.get_frame(), cv2.COLOR_BGR2RGB)
@@ -352,7 +352,7 @@ class VideoClient:
                         self.capture_mode = CaptureMode.VIDEO
                         self.capture = capture
                         self.video_current_frame = 1
-                        self.fps = self.capture.get(cv2.CAP_PROP_FPS)
+                        self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.CLEAR_VIDEO_BUTTON)
                 except FileNotFoundError as e:
                     print(e)
@@ -363,7 +363,7 @@ class VideoClient:
                     with self.capture_lock:
                         self.capture = cv2.VideoCapture(0)
                         self.capture_mode = CaptureMode.CAMERA
-                        self.fps = self.capture.get(cv2.CAP_PROP_FPS)
+                        self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.SELECT_VIDEO_BUTTON)
 
     def incoming_call(self, username: str, ip: str) -> bool:
