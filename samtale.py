@@ -13,7 +13,7 @@ from PIL import Image, ImageTk
 from appJar import gui
 from appJar.appjar import ItemLookupError
 
-from new_call_control import CallControl
+from call_control import CallControl
 from configuration import Configuration, ConfigurationStatus
 from discovery_server import list_users
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram, BufferQuality
@@ -119,7 +119,7 @@ class VideoClient:
         if self.configuration.status == ConfigurationStatus.LOADED:
             self.receive_socket.bind(("0.0.0.0", CurrentUser().udp_port))
 
-        # Select capturing mode TODO: handle camera not found
+        # Select capturing mode
         self.capture_lock = Lock()
         self.capture_mode = CaptureMode.CAMERA
         # This will only be used in CaptureMode.VIDEO
