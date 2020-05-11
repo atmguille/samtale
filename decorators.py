@@ -46,7 +46,7 @@ def run_in_thread(function):
         return
 
     return _run_in_thread
-#
+
 
 def notify_timeout(milliseconds: int):
     def _timeout(function):
