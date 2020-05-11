@@ -1,4 +1,4 @@
-import time
+from time import sleep
 from timeit import default_timer
 from typing import Tuple
 from enum import Enum, auto
@@ -8,19 +8,18 @@ from threading import Lock, Semaphore, Thread
 class UDPDatagram:
     def __init__(self, seq_number: int, resolution: str, fps: float, data: bytes, ts: float = None):
         self.seq_number = seq_number
-        self.sent_ts = ts if ts is not None else time.time()
+        self.sent_ts = ts if ts is not None else default_timer()
         self.resolution = resolution
         self.fps = fps
         self.data = data
         self.received_ts = -1
         self.delay_ts = -1
 
-    def set_received_time(self, ts: float):
+    def set_received_time(self):
         """
         Sets received time and computes datagram delay
-        :param ts: received time
         """
-        self.received_ts = ts
+        self.received_ts = default_timer()
         self.delay_ts = self.received_ts - self.sent_ts
         print(f"Package delay: {self.delay_ts}")
 
@@ -82,7 +81,7 @@ class UDPBuffer:
         """
         while self.__waker_continue:
             self.display_video_semaphore.release()
-            time.sleep(self.__time_between_frames)
+            sleep(self.__time_between_frames)
 
     def insert(self, datagram: UDPDatagram) -> bool:
         """
@@ -90,7 +89,7 @@ class UDPBuffer:
         :param datagram
         :return True if datagram is inserted, False if not
         """
-        datagram.set_received_time(time.time())
+        datagram.set_received_time()
 
         with self.__mutex:
             # If datagram should have already been consumed, discard it
@@ -117,6 +116,7 @@ class UDPBuffer:
                 return True
             # If datagram should be the first element
             if self._buffer[0].seq_number > datagram.seq_number:
+                self.__packages_lost += datagram.seq_number - self._buffer[0].seq_number - 1
                 self._buffer.insert(0, datagram)
                 self.__delay_sum += datagram.delay_ts
                 return True
@@ -156,7 +156,8 @@ class UDPBuffer:
             if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 if self.__initial_frames >= UDPBuffer.MINIMUM_INITIAL_FRAMES:
                     # If we should have consumed but there is no data, skip that frame
-                    self.__last_seq_number += 1
+                    #self.__last_seq_number += 1
+                    pass
                 return bytes(), BufferQuality.SUPER_LOW
 
             # Update last time consumed
