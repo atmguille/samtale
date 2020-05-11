@@ -3,6 +3,7 @@ import socket
 from os import _exit
 from queue import Queue
 from threading import Thread, Semaphore
+from timeit import default_timer
 
 import cv2
 import numpy as np
@@ -45,7 +46,9 @@ class VideoClient(object):
                     self.video_semaphore.release()
 
     def capture_and_send_video(self):
+
         while True:
+            start_time = default_timer()
             # Fetch webcam frame
             local_frame = self.get_frame()
             # Notify visualization thread
@@ -60,9 +63,11 @@ class VideoClient(object):
                 sequence_number = self.call_control.get_sequence_number()
                 if sequence_number < 0:
                     continue
+
+                fps = round(1/(default_timer() - start_time))
                 udp_datagram = UDPDatagram(sequence_number,
                                            f"{self.video_width}x{self.video_height}",
-                                           30,
+                                           fps,
                                            compressed_local_frame).encode()
 
                 assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
