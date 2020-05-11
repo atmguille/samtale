@@ -1,6 +1,7 @@
 import socket
 from threading import Thread, Lock
 from typing import Optional, Tuple
+from timeit import default_timer
 
 from decorators import run_in_thread
 from discovery_server import get_user, UserUnknown, BadUser
@@ -24,6 +25,7 @@ def _open_tcp_socket(src_user: User) -> socket:
 class CallControl:
     BUFFER_SIZE = 1024
     TIMEOUT = 30
+    CONGESTED_INTERVAL = 60
 
     def __init__(self, video_client, start_control_thread: bool):
         self.video_client = video_client
@@ -37,6 +39,7 @@ class CallControl:
         self.we_on_hold = False
         self.they_on_hold = False
         self.sequence_number = 0
+        self.protocol = None
         self.call_lock = Lock()
         self.dst_user: Optional[User] = None
         self.call_socket: Optional[socket] = None
@@ -88,7 +91,14 @@ class CallControl:
 
             self.video_client.display_connect()
             return
-        connection.send(f"CALLING {CurrentUser().nick} {CurrentUser().udp_port}".encode())
+
+        calling_str = f"CALLING {CurrentUser().nick} {CurrentUser().udp_port}"
+        self.protocol = user.get_best_common_protocol()
+        # If common protocol is greater than V0, append protocol to CALLING
+        if self.protocol != "V0":
+            calling_str += f" {self.protocol}"
+
+        connection.send(calling_str.encode())
         try:
             response = connection.recv(CallControl.BUFFER_SIZE)
         except socket.timeout:
@@ -160,6 +170,7 @@ class CallControl:
         self.we_on_hold = False
         self.they_on_hold = False
         self.sequence_number = 0
+        self.protocol = None
         self.video_client.flush_buffer()
         self.call_socket.close()
         self.video_client.display_connect()
@@ -178,6 +189,12 @@ class CallControl:
     def call_resume(self):
         self.we_on_hold = False
         self.call_socket.send(f"CALL_RESUME {CurrentUser().nick}".encode())
+
+    @run_in_thread
+    def call_congested(self):
+        # All protocols different to V0 should support this
+        if self.protocol != "V0":
+            self.call_socket.send(f"CALL_CONGESTED {CurrentUser().nick}".encode())
 
     def control_daemon(self):
         """
@@ -205,8 +222,11 @@ class CallControl:
                 if response[0] != "CALLING":
                     raise Exception("Error in received string")
 
+                self.protocol = response[3] if len(response) > 3 else "V0"
+
                 incoming_user = User(nick=response[1],
-                                     protocols="V0",  # TODO: sería maravilloso que viniera en el CALLING
+                                     # If V1 or +, CALLING has the protocol to be used in last argument
+                                     protocols=self.protocol,
                                      tcp_port=client_address[1],
                                      ip=client_address[0],
                                      udp_port=int(response[2]))
@@ -234,14 +254,20 @@ class CallControl:
         """
         Function that is executed by the listener. Checks if the call must be held, resumed or ended
         """
-        while True:
-            try:
-                try:
-                    response = self.call_socket.recv(BUFFER_SIZE)
-                except socket.error:
-                    self._call_end()
-                    break
 
+        last_congested = 0
+
+        while True:
+            if self.protocol != "V0":
+                if last_congested and default_timer() - last_congested > CallControl.CONGESTED_INTERVAL:
+                    self.video_client.extreme_compression = False
+
+            try:
+                response = self.call_socket.recv(BUFFER_SIZE)
+            except socket.error:
+                self._call_end()
+                break
+            try:
                 response = response.decode().split()
                 if not response:
                     self._call_end()
@@ -250,10 +276,13 @@ class CallControl:
                     self.they_on_hold = True
                 elif response[0] == "CALL_RESUME":
                     self.they_on_hold = False
+                elif self.protocol != "V0" and response[0] == "CALL_CONGESTED":
+                    last_congested = default_timer()
+                    self.video_client.extreme_compression = True
                 elif response[0] == "CALL_END":
                     self._call_end()
                     self.video_client.display_message("Call ended",
                                                       f"The user {self.dst_user.nick} has ended the call")
-                    return
+                    break
             except (ValueError, IndexError) as e:
                 print(f"Error receiving information from client: {e}")

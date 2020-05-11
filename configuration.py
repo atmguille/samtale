@@ -21,8 +21,9 @@ class Configuration:
                 password = self.config["Configuration"]["password"]
                 tcp_port = int(self.config["Configuration"]["tcp_port"])
                 udp_port = int(self.config["Configuration"]["udp_port"])
+                private_ip = self.config["Configuration"]["private_ip"] == "True"
 
-                CurrentUser(nickname, "V0", tcp_port, password, udp_port=udp_port)
+                CurrentUser(nickname, "V0#V1", tcp_port, password, udp_port=udp_port, private_ip=private_ip)
                 # Check if the password is correct
                 try:
                     register()
@@ -37,12 +38,10 @@ class Configuration:
             # No configuration file found
             self.status = ConfigurationStatus.NO_FILE
 
-    def load(self, nickname: str,
-             password: str,
-             tcp_port: int,
-             udp_port: int,
+    def load(self, nickname: str, password: str, tcp_port: int, udp_port: int, private_ip: bool,
              persistent: bool = True) -> Tuple[str, str]:
-        CurrentUser(nickname, "V0", tcp_port, password, udp_port)
+
+        CurrentUser(nickname, "V0#V1", tcp_port, password, udp_port, private_ip=private_ip)
         # Check if the password is correct
         try:
             register()
@@ -56,7 +55,8 @@ class Configuration:
                 "nickname": nickname,
                 "password": password,
                 "tcp_port": tcp_port,
-                "udp_port": udp_port
+                "udp_port": udp_port,
+                "private_ip": private_ip
             }
 
             with open(Configuration.CONFIGURATION_FILENAME, "w") as f:
