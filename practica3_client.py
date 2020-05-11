@@ -16,7 +16,7 @@ from appJar.appjar import ItemLookupError
 from new_call_control import CallControl
 from configuration import Configuration, ConfigurationStatus
 from discovery_server import list_users
-from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
+from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram, BufferQuality
 from user import CurrentUser
 
 MAX_DATAGRAM_SIZE = 65_507
@@ -36,6 +36,7 @@ class VideoClient:
     VIDEO_HEIGHT = 480
 
     REMEMBER_USER_CHECKBOX = "Remember me"
+    USE_PRIVATE_IP = "Use private ip?"
     REGISTER_SUBWINDOW = "Register"
     NICKNAME_WIDGET = "Nickname"
     PASSWORD_WIDGET = "Password"
@@ -207,6 +208,8 @@ class VideoClient:
                 local_frame = self.last_local_frame
             # Fetch remote frame
             remote_frame, quality = self.udp_buffer.consume()
+            if quality == BufferQuality.LOW and self.call_control.in_call():
+                self.call_control.call_congested()
             if not remote_frame and self.call_control.in_call():
                 remote_frame = self.last_remote_frame
             # Show local (and remote) frame
@@ -243,6 +246,7 @@ class VideoClient:
 
                     self.gui.addCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                     self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
+                    self.gui.addCheckBox(VideoClient.USE_PRIVATE_IP)
                     self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
                 except ItemLookupError:
                     # The register window has already been launched in the session
@@ -253,6 +257,7 @@ class VideoClient:
                 ret = self.gui.okBox(f"Registered as {CurrentUser().nick}",
                                      f"You are already registered:\n\n"
                                      f" · nickname:\t{CurrentUser().nick}\n"
+                                     f" · IP:\t{CurrentUser().ip}\n"
                                      f" · TCP Port:\t{CurrentUser().tcp_port}\n"
                                      f" · UDP Port:\t{CurrentUser().udp_port}\n\n"
                                      f"Would you like to end your session? (this will delete your configuration file)")
@@ -272,9 +277,14 @@ class VideoClient:
         elif name == VideoClient.END_BUTTON:
             if self.call_control.in_call():
                 self.call_control.call_end()
+
         elif name == VideoClient.CONNECT_BUTTON:
             if self.configuration.status == ConfigurationStatus.LOADED:
-                self.call_control.call_start(self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET))
+                nickname = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
+                if nickname == CurrentUser().nick:
+                    self.display_message("Not Allowed", "You can't call yourself!")
+                else:
+                    self.call_control.call_start(nickname)
             elif self.configuration.status == ConfigurationStatus.NO_FILE:
                 self.display_message("Registration needed",
                                      "You have to register since no configuration.ini was found at program launch")
@@ -286,13 +296,16 @@ class VideoClient:
                 self.display_message("Registration needed",
                                      "You have to register again since an error occurred reading the configuration.ini "
                                      "file")
+
         elif name == VideoClient.SUBMIT_BUTTON:
             persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
+            private_ip = self.gui.getCheckBox(VideoClient.USE_PRIVATE_IP)
             title, message = self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_WIDGET),
                                                      self.gui.getEntry(VideoClient.PASSWORD_WIDGET),
                                                      int(self.gui.getEntry(VideoClient.TCP_PORT_WIDGET)),
                                                      int(self.gui.getEntry(VideoClient.UDP_PORT_WIDGET)),
-                                                     persistent=persistent)
+                                                     persistent=persistent,
+                                                     private_ip=private_ip)
             self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
             self.display_message(title, message)
             if self.configuration.status == ConfigurationStatus.LOADED:
