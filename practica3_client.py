@@ -72,6 +72,16 @@ class VideoClient:
             self.video_semaphore.release()
             # Compress local frame to send it via the socket
             if self.call_control.should_video_flow():
+
+                if self.extreme_compression:
+                    print("MODO EXTREMO ACTIVADO")
+                    video_width = VideoClient.VIDEO_WIDTH // 2
+                    video_height = VideoClient.VIDEO_HEIGHT // 2
+                    local_frame = cv2.resize(local_frame, (video_width, video_height))
+                else:
+                    video_width = VideoClient.VIDEO_WIDTH
+                    video_height = VideoClient.VIDEO_HEIGHT
+
                 success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
                 if not success:
                     raise Exception("Error compressing the image")
@@ -81,7 +91,7 @@ class VideoClient:
                     continue
 
                 udp_datagram = UDPDatagram(sequence_number,
-                                           f"{VideoClient.VIDEO_WIDTH}x{VideoClient.VIDEO_HEIGHT}",
+                                           f"{video_width}x{video_height}",
                                            self.fps,
                                            compressed_local_frame).encode()
 
@@ -99,6 +109,9 @@ class VideoClient:
         self.gui.setGuiPadding(5)
 
         self.configuration = Configuration()
+
+        # The extreme compression mode will be activated when congestion has been detected
+        self.extreme_compression = False
 
         self.send_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.receive_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -217,6 +230,7 @@ class VideoClient:
                 self.last_remote_frame = remote_frame
                 remote_frame = np.frombuffer(remote_frame, np.uint8)
                 remote_frame = cv2.imdecode(remote_frame, 1)
+                remote_frame = cv2.resize(remote_frame, (VideoClient.VIDEO_WIDTH, VideoClient.VIDEO_HEIGHT))
                 remote_frame = cv2.cvtColor(remote_frame, cv2.COLOR_BGR2RGB)
                 margin = 10
                 mini_frame_width = VideoClient.VIDEO_WIDTH // 4

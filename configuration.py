@@ -21,7 +21,7 @@ class Configuration:
                 password = self.config["Configuration"]["password"]
                 tcp_port = int(self.config["Configuration"]["tcp_port"])
                 udp_port = int(self.config["Configuration"]["udp_port"])
-                private_ip = bool(self.config["Configuration"]["private_ip"])
+                private_ip = self.config["Configuration"]["private_ip"] == "True"
 
                 CurrentUser(nickname, "V0#V1", tcp_port, password, udp_port=udp_port, private_ip=private_ip)
                 # Check if the password is correct

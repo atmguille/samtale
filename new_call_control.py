@@ -260,8 +260,7 @@ class CallControl:
         while True:
             if self.protocol != "V0":
                 if last_congested and default_timer() - last_congested > CallControl.CONGESTED_INTERVAL:
-                    # TODO
-                    pass
+                    self.video_client.extreme_compression = False
 
             try:
                 response = self.call_socket.recv(BUFFER_SIZE)
@@ -279,8 +278,7 @@ class CallControl:
                     self.they_on_hold = False
                 elif self.protocol != "V0" and response[0] == "CALL_CONGESTED":
                     last_congested = default_timer()
-                    # TODO
-                    pass
+                    self.video_client.extreme_compression = True
                 elif response[0] == "CALL_END":
                     self._call_end()
                     self.video_client.display_message("Call ended",
