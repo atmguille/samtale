@@ -90,7 +90,7 @@ class VideoClient(object):
         self.video_width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.video_height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # Add widgets
-        self.last_local_frame = self.get_frame()
+        self.last_local_frame = cv2.cvtColor(self.get_frame(), cv2.COLOR_BGR2RGB)
         self.last_remote_frame = None
         self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
                               VideoClient.get_image(self.last_local_frame),
@@ -140,7 +140,6 @@ class VideoClient(object):
         if not success:
             raise Exception("Couldn't read from webcam")
         frame = cv2.flip(frame, 1)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         return frame
 
     @staticmethod
@@ -155,7 +154,7 @@ class VideoClient(object):
             self.video_semaphore.acquire()
             # Fetch webcam frame
             try:
-                local_frame = self.camera_buffer.get(block=False)
+                local_frame = cv2.cvtColor(self.camera_buffer.get(block=False), cv2.COLOR_BGR2RGB)
                 self.last_local_frame = local_frame
             except queue.Empty:
                 local_frame = self.last_local_frame
@@ -166,7 +165,9 @@ class VideoClient(object):
             # Show local (and remote) frame
             if remote_frame:
                 self.last_remote_frame = remote_frame
-                remote_frame = cv2.imdecode(np.frombuffer(remote_frame, np.uint8), 1)
+                remote_frame = np.frombuffer(remote_frame, np.uint8)
+                remote_frame = cv2.imdecode(remote_frame, 1)
+                remote_frame = cv2.cvtColor(remote_frame, cv2.COLOR_BGR2RGB)
                 margin = 10
                 mini_frame_width = self.video_width // 4
                 mini_frame_height = self.video_height // 4
