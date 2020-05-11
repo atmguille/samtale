@@ -1,8 +1,10 @@
 import queue
 import socket
-from os import _exit
+from enum import Enum, auto
+from os import _exit, getcwd
 from queue import Queue
-from threading import Thread, Semaphore
+from threading import Thread, Semaphore, Lock
+from time import sleep
 from timeit import default_timer
 
 import cv2
@@ -18,6 +20,12 @@ from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram
 from user import CurrentUser
 
 MAX_DATAGRAM_SIZE = 65_507
+
+
+class CaptureMode(Enum):
+    CAMERA = auto()
+    VIDEO = auto()
+    NOT_SET = auto()
 
 
 class VideoClient(object):
@@ -36,6 +44,8 @@ class VideoClient(object):
     END_BUTTON = "End Call"
     REGISTER_BUTTON = "Register"
     USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
+    SELECT_VIDEO_BUTTON = "Select video"
+    CLEAR_VIDEO_BUTTON = "Clear video"
 
     def receive_video(self):
         while True:
@@ -63,7 +73,7 @@ class VideoClient(object):
                 if sequence_number < 0:
                     continue
 
-                fps = round(1/(default_timer() - start_time))
+                fps = round(1 / (default_timer() - start_time))
                 udp_datagram = UDPDatagram(sequence_number,
                                            f"{self.video_width}x{self.video_height}",
                                            fps,
@@ -86,6 +96,13 @@ class VideoClient(object):
         if self.configuration.status == ConfigurationStatus.LOADED:
             self.receive_socket.bind(("0.0.0.0", CurrentUser().udp_port))
 
+        # Select capturing mode TODO: handle camera not found
+        self.capture_lock = Lock()
+        self.capture_mode = CaptureMode.CAMERA
+        # This will only be used in CaptureMode.VIDEO
+        self.video_frame = 0
+        self.video_fps = 0
+
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
             raise Exception("No camera detected")
@@ -101,7 +118,8 @@ class VideoClient(object):
                               fmt="PhotoImage", row=0, column=1)
         self.gui.addButtons([VideoClient.REGISTER_BUTTON,
                              VideoClient.END_BUTTON,
-                             VideoClient.HOLD_RESUME_BUTTON],
+                             VideoClient.HOLD_RESUME_BUTTON,
+                             VideoClient.SELECT_VIDEO_BUTTON],
                             self.buttons_callback, row=1, column=1)
         self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
         if self.configuration.status == ConfigurationStatus.LOADED:
@@ -140,11 +158,23 @@ class VideoClient(object):
         return True
 
     def get_frame(self):
-        success, frame = self.capture.read()
-        if not success:
-            raise Exception("Couldn't read from webcam")
-        frame = cv2.flip(frame, 1)
-        return frame
+        with self.capture_lock:
+            success, frame = self.capture.read()
+            if not success:
+                raise Exception("Couldn't read video")
+
+            if self.capture_mode == CaptureMode.CAMERA:
+                frame = cv2.flip(frame, 1)
+            elif self.capture_mode == CaptureMode.VIDEO:
+                self.video_frame += 1
+
+                if self.video_frame == self.capture.get(cv2.CAP_PROP_FRAME_COUNT):
+                    self.video_frame = 0
+                    self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+                sleep(1 / self.video_fps)
+
+            return frame
 
     @staticmethod
     def get_image(frame):
@@ -268,6 +298,28 @@ class VideoClient(object):
                 self.receive_socket.bind(("0.0.0.0", CurrentUser().udp_port))
                 self.call_control.control_thread.start()
                 self.gui.setButton(VideoClient.REGISTER_BUTTON, CurrentUser().nick)
+        elif name == VideoClient.SELECT_VIDEO_BUTTON:
+            if self.gui.getButton(VideoClient.SELECT_VIDEO_BUTTON) == VideoClient.SELECT_VIDEO_BUTTON:
+                ret = self.gui.openBox(title="Select video file",
+                                       dirName=getcwd(),
+                                       multiple=False)
+                try:
+                    with self.capture_lock:
+                        self.capture = cv2.VideoCapture(ret)
+                        self.capture_mode = CaptureMode.VIDEO
+                        self.video_frame = 0
+                        self.video_fps = self.capture.get(cv2.CAP_PROP_FPS)
+                        self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.CLEAR_VIDEO_BUTTON)
+                except Exception as e:
+                    print(e)
+            else:
+                answer = self.gui.yesNoBox("Clear video",
+                                           "Are you sure you want to clear the video?")
+                if answer:
+                    with self.capture_lock:
+                        self.capture = cv2.VideoCapture(0)
+                        self.capture_mode = CaptureMode.CAMERA
+                        self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.SELECT_VIDEO_BUTTON)
 
     def incoming_call(self, username: str, ip: str) -> bool:
         accept = self.gui.yesNoBox("Incoming call",
