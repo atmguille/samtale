@@ -21,7 +21,6 @@ class UDPDatagram:
         """
         self.received_ts = time()
         self.delay_ts = self.received_ts - self.sent_ts
-        print(f"Package delay: {self.delay_ts}")
 
     def __str__(self):
         return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#" + self.data.decode()
@@ -112,36 +111,36 @@ class UDPBuffer:
             if buffer_len == 0:
                 self._buffer.append(datagram)
                 self.__delay_sum += datagram.delay_ts
-                self._buffer_quality = BufferQuality.LOW
+                self._buffer_quality = BufferQuality.MEDIUM
                 return True
+
             # If datagram should be the first element
             if self._buffer[0].seq_number > datagram.seq_number:
-                self.__packages_lost += datagram.seq_number - self._buffer[0].seq_number - 1
+                self.__packages_lost += self._buffer[0].seq_number - datagram.seq_number - 1
                 self._buffer.insert(0, datagram)
                 self.__delay_sum += datagram.delay_ts
-                return True
 
-            for i in range(buffer_len - 1, -1, -1):
-                if self._buffer[i].seq_number < datagram.seq_number:
-                    if i + 1 < buffer_len:
-                        self.__packages_lost -= 1  # Since package is inserted in the middle, there is one less lost
-                    else:
-                        self.__packages_lost += datagram.seq_number - self._buffer[i].seq_number - 1
+            else:
+                for i in range(buffer_len - 1, -1, -1):
+                    if self._buffer[i].seq_number < datagram.seq_number:
+                        if i + 1 < buffer_len:
+                            self.__packages_lost -= 1  # Since package is inserted in the middle, there is one less lost
+                        else:
+                            self.__packages_lost += datagram.seq_number - self._buffer[i].seq_number - 1
 
-                    self.__delay_sum += datagram.delay_ts
-                    self._buffer.insert(i + 1, datagram)
-                    # Recompute buffer_quality TODO: pesos y score
-                    score = self.__packages_lost + 100 * (self.__delay_sum / (buffer_len + 1))
-                    print(f"Paquetes perdidos {self.__packages_lost}")
-                    print(f"Delay sum {self.__delay_sum}")
-                    print(f"Score: {score}")
-                    if score < 5:
-                        self._buffer_quality = BufferQuality.HIGH
-                    elif score < 20:
-                        self._buffer_quality = BufferQuality.MEDIUM
-                    else:
-                        self._buffer_quality = BufferQuality.LOW
-                    return True
+                        self.__delay_sum += datagram.delay_ts
+                        self._buffer.insert(i + 1, datagram)
+                        break
+
+            # Recompute buffer_quality
+            score = self.__packages_lost + 100 * (self.__delay_sum / (buffer_len + 1))
+            if score < 5:
+                self._buffer_quality = BufferQuality.HIGH
+            elif score < 20:
+                self._buffer_quality = BufferQuality.MEDIUM
+            else:
+                self._buffer_quality = BufferQuality.LOW
+            return True
 
     def consume(self) -> Tuple[bytes, BufferQuality]:
         """
@@ -154,10 +153,6 @@ class UDPBuffer:
                 return bytes(), BufferQuality.MEDIUM
 
             if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
-                if self.__initial_frames >= UDPBuffer.MINIMUM_INITIAL_FRAMES:
-                    # If we should have consumed but there is no data, skip that frame
-                    #self.__last_seq_number += 1
-                    pass
                 return bytes(), BufferQuality.SUPER_LOW
 
             # Update last time consumed
@@ -167,7 +162,6 @@ class UDPBuffer:
             self.__last_seq_number = consumed_datagram.seq_number
             self.__delay_sum -= consumed_datagram.delay_ts
             quality = self._buffer_quality
-            print(quality)
 
             if not self._buffer:
                 self._buffer_quality = BufferQuality.SUPER_LOW

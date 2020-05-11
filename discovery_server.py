@@ -53,7 +53,7 @@ def register():
     :raise RegisterFailed
     """
     user = CurrentUser()
-    string_to_send = f"REGISTER {user.nick} {user.ip} {user.tcp_port} {user.password} {user.protocols}"
+    string_to_send = f"REGISTER {user.nick} {user.ip} {user.tcp_port} {user.password} {'#'.join(user.protocols)}"
     response = _send(string_to_send.encode()).split()
     if response[0] == "NOK":
         raise RegisterFailed
