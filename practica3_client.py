@@ -28,7 +28,13 @@ class CaptureMode(Enum):
     NOT_SET = auto()
 
 
-class VideoClient(object):
+class VideoClient:
+    APP_NAME = "Samtale"
+    APP_WIDTH = 800
+    APP_HEIGHT = 525
+    VIDEO_WIDTH = 640
+    VIDEO_HEIGHT = 480
+
     REMEMBER_USER_CHECKBOX = "Remember me"
     REGISTER_SUBWINDOW = "Register"
     NICKNAME_WIDGET = "Nickname"
@@ -40,12 +46,12 @@ class VideoClient(object):
     CONNECT_BUTTON = "Connect"
     HOLD_BUTTON = "Hold"
     RESUME_BUTTON = "Resume"
-    HOLD_RESUME_BUTTON = "Hold/Resume"
     END_BUTTON = "End Call"
     REGISTER_BUTTON = "Register"
     USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
     SELECT_VIDEO_BUTTON = "Select video"
     CLEAR_VIDEO_BUTTON = "Clear video"
+    TYPE_NICKNAME_LABEL = "Type nickname:"
 
     def receive_video(self):
         while True:
@@ -75,7 +81,7 @@ class VideoClient(object):
 
                 fps = round(1 / (default_timer() - start_time))
                 udp_datagram = UDPDatagram(sequence_number,
-                                           f"{self.video_width}x{self.video_height}",
+                                           f"{VideoClient.VIDEO_WIDTH}x{VideoClient.VIDEO_HEIGHT}",
                                            fps,
                                            compressed_local_frame).encode()
 
@@ -85,8 +91,9 @@ class VideoClient(object):
                 if address:
                     self.send_socket.sendto(udp_datagram, address)
 
-    def __init__(self, window_size):
-        self.gui = gui("Skype", window_size)
+    def __init__(self):
+        self.gui = gui(VideoClient.APP_NAME, f"{VideoClient.APP_WIDTH}x{VideoClient.APP_HEIGHT}")
+        self.gui.setResizable(False)
         self.gui.setGuiPadding(5)
 
         self.configuration = Configuration()
@@ -107,30 +114,30 @@ class VideoClient(object):
         if not self.capture.isOpened():
             raise Exception("No camera detected")
 
-        # Get dimensions of the video stream
-        self.video_width = int(self.capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.video_height = int(self.capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         # Add widgets
         self.last_local_frame = cv2.cvtColor(self.get_frame(), cv2.COLOR_BGR2RGB)
         self.last_remote_frame = None
         self.gui.addImageData(VideoClient.VIDEO_WIDGET_NAME,
                               VideoClient.get_image(self.last_local_frame),
-                              fmt="PhotoImage", row=0, column=1)
-        self.gui.addButtons([VideoClient.REGISTER_BUTTON,
+                              fmt="PhotoImage", row=0, column=1, rowspan=2)
+        self.gui.addButtons([VideoClient.CONNECT_BUTTON,
+                             VideoClient.SELECT_VIDEO_BUTTON,
+                             VideoClient.HOLD_BUTTON,
                              VideoClient.END_BUTTON,
-                             VideoClient.HOLD_RESUME_BUTTON,
-                             VideoClient.SELECT_VIDEO_BUTTON],
-                            self.buttons_callback, row=1, column=1)
-        self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
+                             VideoClient.REGISTER_BUTTON], self.buttons_callback, row=2, column=0, colspan=2)
+
         if self.configuration.status == ConfigurationStatus.LOADED:
             self.gui.setButton(VideoClient.REGISTER_BUTTON, CurrentUser().nick)
 
         self.users = {user.nick: user for user in list_users()}
         nicks = list(self.users.keys())
         # self.gui.setStretch("both")
+        self.gui.setStretch("column")
+        self.gui.setSticky("nw")
+        self.gui.addLabel(VideoClient.TYPE_NICKNAME_LABEL, VideoClient.TYPE_NICKNAME_LABEL, row=0, column=0)
+        self.gui.setStretch("both")
         self.gui.setSticky("new")
-        self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=0, column=0)
-        self.gui.addButton(VideoClient.CONNECT_BUTTON, self.buttons_callback, row=1, column=0)
+        self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=1, column=0)
 
         # Initialize threads
         start_control_thread = self.configuration.status == ConfigurationStatus.LOADED
@@ -174,6 +181,8 @@ class VideoClient(object):
 
                 sleep(1 / self.video_fps)
 
+            frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_AREA)
+
             return frame
 
     @staticmethod
@@ -203,8 +212,8 @@ class VideoClient(object):
                 remote_frame = cv2.imdecode(remote_frame, 1)
                 remote_frame = cv2.cvtColor(remote_frame, cv2.COLOR_BGR2RGB)
                 margin = 10
-                mini_frame_width = self.video_width // 4
-                mini_frame_height = self.video_height // 4
+                mini_frame_width = VideoClient.VIDEO_WIDTH // 4
+                mini_frame_height = VideoClient.VIDEO_HEIGHT // 4
                 mini_frame = cv2.resize(local_frame, (mini_frame_width, mini_frame_height))
                 remote_frame[-mini_frame_height - margin:-margin, -mini_frame_width - margin:-margin] = mini_frame
                 self.show_video(remote_frame)
@@ -259,14 +268,14 @@ class VideoClient(object):
                     self.configuration.delete()
                     self.gui.stop()
 
-        elif name == VideoClient.HOLD_RESUME_BUTTON:
+        elif name == VideoClient.HOLD_BUTTON:
             if self.call_control.in_call():
-                if self.gui.getButton(VideoClient.HOLD_RESUME_BUTTON) == VideoClient.HOLD_BUTTON:
+                if self.gui.getButton(VideoClient.HOLD_BUTTON) == VideoClient.HOLD_BUTTON:
                     self.call_control.call_hold()
-                    self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.RESUME_BUTTON)
+                    self.gui.setButton(VideoClient.HOLD_BUTTON, VideoClient.RESUME_BUTTON)
                 else:
                     self.call_control.call_resume()
-                    self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
+                    self.gui.setButton(VideoClient.HOLD_BUTTON, VideoClient.HOLD_BUTTON)
 
         elif name == VideoClient.END_BUTTON:
             if self.call_control.in_call():
@@ -356,11 +365,10 @@ class VideoClient(object):
     def display_connect(self):
         self.gui.setButton(VideoClient.CONNECT_BUTTON,
                            VideoClient.CONNECT_BUTTON)
-        self.gui.setButton(VideoClient.HOLD_RESUME_BUTTON, VideoClient.HOLD_BUTTON)
+        self.gui.setButton(VideoClient.HOLD_BUTTON, VideoClient.HOLD_BUTTON)
 
 
 if __name__ == '__main__':
-    vc = VideoClient("800x520")
-
+    vc = VideoClient()
     vc.start()
     _exit(0)
