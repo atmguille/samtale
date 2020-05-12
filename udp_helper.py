@@ -1,6 +1,7 @@
 import time
 from timeit import default_timer
 from typing import Tuple
+from functools import total_ordering
 from enum import Enum, auto
 from threading import Lock, Semaphore, Thread
 
@@ -44,6 +45,7 @@ def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
                                    fps=float(fields[3]), data=data)
 
 
+@total_ordering
 class BufferQuality(Enum):
     """
     Enum with the different types of quality (depending on packages lost, delays...)
@@ -52,6 +54,11 @@ class BufferQuality(Enum):
     LOW = auto()
     MEDIUM = auto()
     HIGH = auto()
+
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
 
 
 class UDPBuffer:
