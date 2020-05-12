@@ -30,7 +30,7 @@ class CallControl:
     def __init__(self, video_client, start_control_thread: bool):
         self.video_client = video_client
         # Control thread
-        self.control_socket = _open_tcp_socket(CurrentUser())
+        self.control_socket = None
         self.control_thread = Thread(target=self.control_daemon, daemon=True)
         if start_control_thread:
             self.control_thread.start()
@@ -176,7 +176,6 @@ class CallControl:
         self.call_socket.close()
         self.video_client.display_connect()
 
-    @run_in_thread
     def call_end(self):
         self.call_socket.send(f"CALL_END {CurrentUser().nick}".encode())
         self._call_end()
@@ -204,6 +203,7 @@ class CallControl:
         the user can interact with the call (deny it, ...)
         :return:
         """
+        self.control_socket = _open_tcp_socket(CurrentUser())
         self.control_socket.listen(1)
         while True:
             connection, client_address = self.control_socket.accept()

@@ -180,7 +180,8 @@ class VideoClient:
         if self.call_control.in_call():
             self.call_control.call_end()
         # Close sockets
-        self.call_control.control_socket.close()
+        if self.call_control.control_socket is not None:
+            self.call_control.control_socket.close()
         self.send_socket.close()
         self.receive_socket.close()
 
@@ -366,8 +367,13 @@ class VideoClient:
                 if answer:
                     with self.capture_lock:
                         self.capture = cv2.VideoCapture(0)
-                        self.capture_mode = CaptureMode.CAMERA
-                        self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
+                        if not self.capture.isOpened():
+                            self.capture_mode = CaptureMode.NO_CAMERA
+                            self.fps = VideoClient.NO_CAMERA_FPS
+                        else:
+                            self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
+                            self.capture_mode = CaptureMode.CAMERA
+
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.SELECT_VIDEO_BUTTON)
 
     def incoming_call(self, username: str, ip: str) -> bool:
