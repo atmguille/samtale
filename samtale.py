@@ -177,10 +177,7 @@ class VideoClient:
         self.gui.go()
 
     def stop(self) -> bool:
-        if self.call_control.in_call():
-            self.call_control.call_end()
-        # Close sockets
-        self.call_control.control_socket.close()
+        # Close sockets (call control sockets are closed internally)
         self.send_socket.close()
         self.receive_socket.close()
 

@@ -30,7 +30,7 @@ class CallControl:
     def __init__(self, video_client, start_control_thread: bool):
         self.video_client = video_client
         # Control thread
-        self.control_socket = _open_tcp_socket(CurrentUser())
+        self._control_socket = None
         self.control_thread = Thread(target=self.control_daemon, daemon=True)
         if start_control_thread:
             self.control_thread.start()
@@ -45,6 +45,13 @@ class CallControl:
         self.dst_user: Optional[User] = None
         self.call_socket: Optional[socket] = None
         self.call_thread: Optional[Thread] = None
+
+    def __del__(self):
+        if self.in_call():
+            self.call_end()
+
+        if self._control_socket is not None:
+            self._control_socket.close()
 
     def in_call(self) -> bool:
         with self.call_lock:
@@ -204,9 +211,10 @@ class CallControl:
         the user can interact with the call (deny it, ...)
         :return:
         """
-        self.control_socket.listen(1)
+        self._control_socket = _open_tcp_socket(CurrentUser())
+        self._control_socket.listen(1)
         while True:
-            connection, client_address = self.control_socket.accept()
+            connection, client_address = self._control_socket.accept()
             connection.settimeout(3)
 
             try:
