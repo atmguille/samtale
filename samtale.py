@@ -229,7 +229,7 @@ class VideoClient:
             remote_frame, quality = self.udp_buffer.consume()
 
             now = default_timer()
-            if quality == BufferQuality.LOW and last_congested \
+            if quality < BufferQuality.MEDIUM and last_congested \
                     and now - last_congested > VideoClient.CONGESTED_INTERVAL \
                     and self.call_control.in_call():
                 last_congested = now
