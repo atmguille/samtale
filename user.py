@@ -35,7 +35,7 @@ class User:
         :param udp_port: if not specified, initialized to None until it is updated
         """
         self.nick = nick
-        self.protocols = protocols.split("#")
+        self.protocols = [protocol.upper() for protocol in protocols.split("#")]
         self.ip = ip if ip is not None else _get_public_ip()
         self.tcp_port = tcp_port
         self.udp_port = udp_port
