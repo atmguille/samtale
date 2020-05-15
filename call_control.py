@@ -28,9 +28,15 @@ class CallControl:
     CONGESTED_INTERVAL = 60
 
     def __init__(self, video_client, start_control_thread: bool):
+        """
+        Default constructor
+        :param video_client: instance of the video client. Needed to access methods from the GUI
+        :param start_control_thread: True in control thread (the one who listens for requests) should start.
+                                     This may only happen when CurrentUser is initialized.
+        """
         self.video_client = video_client
         # Control thread
-        self.control_socket = None
+        self.control_socket: Optional[socket] = None
         self.control_thread = Thread(target=self.control_daemon, daemon=True)
         if start_control_thread:
             self.control_thread.start()
@@ -47,17 +53,30 @@ class CallControl:
         self.call_thread: Optional[Thread] = None
 
     def in_call(self) -> bool:
+        """
+        :return: if we are in a call
+        """
         with self.call_lock:
             return self._in_call
 
     def waiting(self) -> bool:
+        """
+        :return: if we are waiting for a call to be answered
+        """
         with self.call_lock:
             return self._waiting
 
     def should_video_flow(self) -> bool:
+        """
+        :return: if video should flow in both directions. This happens when we are in a call and
+                 none of the users is on hold.
+        """
         return self.in_call() and not (self.we_on_hold or self.they_on_hold)
 
     def get_sequence_number(self) -> int:
+        """
+        :return: sequence number of the current call, incrementing it by 1. If we are not in a call, -1.
+        """
         if self.in_call():
             self.sequence_number += 1
             return self.sequence_number
@@ -65,9 +84,18 @@ class CallControl:
         return -1
 
     def get_send_address(self) -> Tuple[str, int]:
+        """
+        Can be used to check if data received from socket comes from desired user
+        :return: dst_user.ip, dst_user.udp_port.
+        """
         return self.dst_user.ip, self.dst_user.udp_port
 
     def _call_start(self, nickname: str):
+        """
+        Try to establish a call with the desired user, waiting for his answer. It displays information of the process
+        to the user using the GUI methods
+        :param nickname
+        """
         # Fetch user from server
         try:
             user = get_user(nickname)
@@ -147,6 +175,11 @@ class CallControl:
             connection.close()
 
     def call_start(self, nickname: str):
+        """
+        Checks if a call can be started before calling _call_start in a separate Thread. By this, deadlock is avoided if
+        two call_start are executed before the first one have an answer
+        :param nickname: nick of the user to be called
+        """
         self.call_lock.acquire()
         if self._in_call:
             self.call_lock.release()
@@ -166,6 +199,9 @@ class CallControl:
         Thread(target=self._call_start, args=(nickname,), daemon=True).start()
 
     def _call_end(self):
+        """
+        Reset attributes related with a call when it is over
+        """
         self._in_call = False
         self._waiting = False
         self.we_on_hold = False
@@ -177,21 +213,36 @@ class CallControl:
         self.video_client.display_connect()
 
     def call_end(self):
+        """
+        Notify the other end we are ending the call and reset attributes
+        """
         self.call_socket.send(f"CALL_END {CurrentUser().nick}".encode())
         self._call_end()
 
     @run_in_thread
     def call_hold(self):
+        """
+        Holds the call in our end and notifies the other end that we are doing so. Executed in a separate thread to
+        avoid delays in executing other functions by the main thread.
+        """
         self.we_on_hold = True
         self.call_socket.send(f"CALL_HOLD {CurrentUser().nick}".encode())
 
     @run_in_thread
     def call_resume(self):
+        """
+        Resumes the call in our end and notifies the other end that we are doing so. Executed in a separate thread to
+        avoid delays in executing other functions by the main thread.
+        """
         self.we_on_hold = False
         self.call_socket.send(f"CALL_RESUME {CurrentUser().nick}".encode())
 
     @run_in_thread
     def call_congested(self):
+        """
+        Notifies the other end that the quality of the connection in our end is not good, so he can take measures.
+        This is done only if call protocol is not V0 (checked inside)
+        """
         # All protocols different to V0 should support this
         if self.protocol != "V0":
             self.call_socket.send(f"CALL_CONGESTED {CurrentUser().nick}".encode())
@@ -201,7 +252,6 @@ class CallControl:
         Function executed by the listener, checking if someone is calling us. If we are already in a call,
         it answers CALL_BUSY to the incoming user. If we are available, builds a new CallControl, where
         the user can interact with the call (deny it, ...)
-        :return:
         """
         self.control_socket = _open_tcp_socket(CurrentUser())
         self.control_socket.listen(1)
@@ -214,7 +264,7 @@ class CallControl:
 
                 self.call_lock.acquire()
                 if self._in_call or self._waiting:
-                    self.call_lock.release()
+                    self.call_lock.release()  # Release the lock asap
                     connection.send("CALL_BUSY".encode())
                     self.video_client.display_message(f"{response[1]} called you", f"{response[1]} called you")
                     continue
@@ -222,15 +272,17 @@ class CallControl:
                 if response[0] != "CALLING":
                     raise Exception("Error in received string")
 
+                # If V1 or +, CALLING has the protocol to be used in last argument
                 self.protocol = response[3] if len(response) > 3 else "V0"
 
                 incoming_user = User(nick=response[1],
-                                     # If V1 or +, CALLING has the protocol to be used in last argument
                                      protocols=self.protocol,
                                      tcp_port=client_address[1],
                                      ip=client_address[0],
                                      udp_port=int(response[2]))
                 connection.settimeout(None)  # The connection should not be closed until wanted
+
+                # Wait for the user's answer without blocking the execution (releasing the lock)
                 self.call_lock.release()
                 accept = self.video_client.incoming_call(incoming_user.nick, incoming_user.ip)
                 self.call_lock.acquire()
@@ -252,13 +304,14 @@ class CallControl:
 
     def call_daemon(self):
         """
-        Function that is executed by the listener. Checks if the call must be held, resumed or ended
+        Function that is executed by the listener thread (one per call).
+        Checks if the call must be held, resumed, ended of if the connection is congested, notifying the user in any case
         """
-
         last_congested = 0
 
         while True:
-            if self.protocol != "V0":
+            if self.protocol != "V0":  # Check congested condition only if using protocol that requires it
+                # If last congested has not been received since CONGESTED_INTERVAL seconds, deactivate extreme compression
                 if last_congested and default_timer() - last_congested > CallControl.CONGESTED_INTERVAL:
                     self.video_client.extreme_compression = False
 
@@ -269,6 +322,7 @@ class CallControl:
                 break
             try:
                 response = response.decode().split()
+                # If socket is closed, no exception is thrown but response is empty
                 if not response:
                     self._call_end()
                     break
