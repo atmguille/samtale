@@ -1,5 +1,6 @@
 import queue
 import socket
+import argparse
 from enum import Enum, auto
 from os import _exit, getcwd
 from queue import Queue
@@ -18,6 +19,7 @@ from configuration import Configuration, ConfigurationStatus
 from discovery_server import list_users
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram, BufferQuality
 from user import CurrentUser
+import logger
 
 MAX_DATAGRAM_SIZE = 65_507
 
@@ -105,7 +107,8 @@ class VideoClient:
             sleep(1 / self.fps)
 
     def __init__(self):
-        self.gui = gui(VideoClient.APP_NAME, f"{VideoClient.APP_WIDTH}x{VideoClient.APP_HEIGHT}")
+        self.gui = gui(VideoClient.APP_NAME, f"{VideoClient.APP_WIDTH}x{VideoClient.APP_HEIGHT}", handleArgs=False)
+        self.gui.setLogLevel("WARNING")
         self.gui.setResizable(False)
         self.gui.setGuiPadding(5)
 
@@ -157,7 +160,7 @@ class VideoClient:
         self.gui.setSticky("new")
         self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=1, column=0)
         self.gui.addStatusbar(fields=3)
-        self.gui.setStatusbar("Buffer Quality: N/A", 0)
+        self.gui.setStatusbar("Call Quality: N/A", 0)
         self.gui.setStatusbar("Packages lost: N/A", 1)
         self.gui.setStatusbar("Delay avg (ms): N/A", 2)
 
@@ -261,13 +264,13 @@ class VideoClient:
                 mini_frame = cv2.resize(local_frame, (mini_frame_width, mini_frame_height))
                 remote_frame[-mini_frame_height - margin:-margin, -mini_frame_width - margin:-margin] = mini_frame
 
-                self.gui.setStatusbar(f"Buffer Quality: {quality.name}", 0)
+                self.gui.setStatusbar(f"Call Quality: {quality.name}", 0)
                 self.gui.setStatusbar(f"Packages lost: {packages_lost}", 1)
                 self.gui.setStatusbar(f"Delay avg (ms): {round(delay_avg, ndigits=2)}", 2)
 
                 self.show_video(remote_frame)
             elif not remote_frame:
-                self.gui.setStatusbar("Buffer Quality: N/A", 0)
+                self.gui.setStatusbar("Call Quality: N/A", 0)
                 self.gui.setStatusbar("Packages lost: N/A", 1)
                 self.gui.setStatusbar("Delay avg (ms): N/A", 2)
                 self.show_video(local_frame)
@@ -423,6 +426,17 @@ class VideoClient:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Samtale')
+
+    parser.add_argument('-log_level', action='store', nargs='?', default='warning',
+                        choices=['debug', 'info', 'warning', 'error', 'critical'], required=False,
+                        help='Indicate logging level')
+
+    args = parser.parse_args()
+
+    log = logger.set_logger(args)
     vc = VideoClient()
+    log.info("Starting Samtale...")
     vc.start()
+    log.info("Exiting Samtale...")
     _exit(0)

@@ -148,12 +148,13 @@ class UDPBuffer:
             if datagram.delay_ts > 0:
                 self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
 
-            # Recompute buffer_quality
+            # Recompute buffer_quality  # TODO: definitivo???
             score = 5 * self.__num_holes + 2 * self.__packages_lost/(datagram.seq_number+1)
             if 150 < self.__avg_delay < 300:
                 score += 10
             elif self.__avg_delay > 300:
                 score += 30
+
             if score < 5:
                 self._buffer_quality = BufferQuality.HIGH
             elif score < 20:
