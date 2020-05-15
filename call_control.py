@@ -142,7 +142,7 @@ class CallControl:
                 raise ValueError()
         except (ValueError, IndexError):
             self.video_client.display_message("Error establishing connection",
-                                              f"Error establishing connection with{user.nick}")
+                                              f"Error establishing connection with {user.nick}")
             self.video_client.display_connect()
             connection.close()
 

@@ -14,14 +14,14 @@ class UDPDatagram:
         self.fps = fps
         self.data = data
         self.received_ts = -1
-        self.delay_ts = -1
+        self.delay_ts = -1  # Measured in ms
 
     def set_received_time(self):
         """
         Sets received time and computes datagram delay
         """
         self.received_ts = time()
-        self.delay_ts = self.received_ts - self.sent_ts
+        self.delay_ts = (self.received_ts - self.sent_ts) * 1000
 
     def __str__(self):
         return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#" + self.data.decode()
@@ -64,7 +64,7 @@ class UDPBuffer:
     U = 0.2
     BUFFER_MAX = 5
     CONSUME_SPEEDUP = 1.5
-    MAXIMUM_DELAY = .400  # (measured in seconds)
+    MAXIMUM_DELAY = 400  # (measured in ms)
 
     def __init__(self, display_video_semaphore: Semaphore):
         self._buffer = []
@@ -73,7 +73,7 @@ class UDPBuffer:
         self._buffer_quality = BufferQuality.SUPER_LOW
         self.__num_holes = 0  # Number of missing packages in the buffer
         self.__packages_lost = 0
-        self.__avg_delay = 0
+        self.__avg_delay = 0  # Measured in ms
         self.__initial_frames = 0
         self.__time_between_frames = 0
         self.__last_consumed = None
@@ -123,11 +123,9 @@ class UDPBuffer:
             # If buffer is currently empty
             if buffer_len == 0:
                 self._buffer.append(datagram)
-                self._buffer_quality = BufferQuality.MEDIUM
-                return True
 
             # If datagram should be the first element
-            if self._buffer[0].seq_number > datagram.seq_number:
+            elif self._buffer[0].seq_number > datagram.seq_number:
                 self.__num_holes += self._buffer[0].seq_number - datagram.seq_number - 1
                 self._buffer.insert(0, datagram)
 
@@ -142,9 +140,9 @@ class UDPBuffer:
                         self._buffer.insert(i + 1, datagram)
                         break
 
-            self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
-            print(f"Datagrama: {datagram.delay_ts}")
-            print(f"Delay avg: {self.__avg_delay}")
+            # Some delays may be negative if clocks are not synchronized in both ends
+            if datagram.delay_ts > 0:
+                self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
 
             # Recompute buffer_quality
             score = self.__num_holes + 100 * self.__avg_delay
@@ -177,10 +175,7 @@ class UDPBuffer:
             self.__packages_lost += consumed_datagram.seq_number - self.__last_seq_number - 1
             self.__last_seq_number = consumed_datagram.seq_number
 
-            # TODO
-            if not self._buffer:
-                self._buffer_quality = BufferQuality.SUPER_LOW
-            else:
+            if self._buffer:
                 self.__num_holes -= self._buffer[0].seq_number - consumed_datagram.seq_number - 1
 
             return consumed_datagram.data
