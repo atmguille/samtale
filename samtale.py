@@ -32,7 +32,7 @@ class CaptureMode(Enum):
 
 class VideoClient:
     APP_NAME = "Samtale"
-    APP_WIDTH = 800
+    APP_WIDTH = 850
     APP_HEIGHT = 550
     VIDEO_WIDTH = 640
     VIDEO_HEIGHT = 480
@@ -152,7 +152,6 @@ class VideoClient:
 
         self.users = {user.nick: user for user in list_users()}
         nicks = list(self.users.keys())
-        # self.gui.setStretch("both")
         self.gui.setStretch("column")
         self.gui.setSticky("nw")
         self.gui.addLabel(VideoClient.TYPE_NICKNAME_LABEL, VideoClient.TYPE_NICKNAME_LABEL, row=0, column=0)
