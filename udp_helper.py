@@ -61,7 +61,7 @@ class BufferQuality(Enum):
 
 class UDPBuffer:
     MINIMUM_INITIAL_FRAMES = 5
-    U = 0.2
+    U = 0.01
     BUFFER_MAX = 5
     CONSUME_SPEEDUP = 1.5
     MAXIMUM_DELAY = 400  # (measured in ms)
@@ -116,6 +116,10 @@ class UDPBuffer:
 
             if self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 self.__initial_frames += 1
+                if self.__initial_frames == 1:
+                    if datagram.delay_ts > 0:
+                        # TODO: logging
+                        self.__avg_delay = datagram.delay_ts
                 if self.__initial_frames == UDPBuffer.MINIMUM_INITIAL_FRAMES:
                     # If we are ready to start playing, start the waker thread
                     Thread(target=self.wake_displayer, daemon=True).start()
