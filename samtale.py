@@ -143,6 +143,10 @@ class VideoClient:
                              VideoClient.HOLD_BUTTON,
                              VideoClient.END_BUTTON,
                              VideoClient.REGISTER_BUTTON], self.buttons_callback, row=2, column=0, colspan=2)
+        self.gui.addStatusbar(fields=3)
+        self.gui.setStatusbar("Buffer Quality: N/A", 0)
+        self.gui.setStatusbar("Packages lost : N/A", 1)
+        self.gui.setStatusbar("Delay avg: N/A", 2)
 
         if self.configuration.status == ConfigurationStatus.LOADED:
             self.gui.setButton(VideoClient.REGISTER_BUTTON, CurrentUser().nick)
@@ -227,7 +231,8 @@ class VideoClient:
             except queue.Empty:
                 local_frame = self.last_local_frame
             # Fetch remote frame
-            remote_frame, quality = self.udp_buffer.consume()
+            remote_frame = self.udp_buffer.consume()
+            quality, packages_lost, delay_avg = self.udp_buffer.get_statistics()
             # If we are using V0, decrease our video quality (assuming that the connection is symmetric)
             # If V1 (or higher) is used, we will send a CALL_CONGESTED to the other end
             if self.call_control.in_call() and quality < BufferQuality.MEDIUM:
@@ -256,8 +261,16 @@ class VideoClient:
                 mini_frame_height = VideoClient.VIDEO_HEIGHT // 4
                 mini_frame = cv2.resize(local_frame, (mini_frame_width, mini_frame_height))
                 remote_frame[-mini_frame_height - margin:-margin, -mini_frame_width - margin:-margin] = mini_frame
+
+                self.gui.setStatusbar(f"Buffer Quality: {quality}", 0)
+                self.gui.setStatusbar(f"Packages lost : {packages_lost}", 1)
+                self.gui.setStatusbar(f"Delay avg: {delay_avg}", 2)
+
                 self.show_video(remote_frame)
             elif not remote_frame:
+                self.gui.setStatusbar("Buffer Quality: N/A", 0)
+                self.gui.setStatusbar("Packages lost : N/A", 1)
+                self.gui.setStatusbar("Delay avg: N/A", 2)
                 self.show_video(local_frame)
 
     def buttons_callback(self, name: str):

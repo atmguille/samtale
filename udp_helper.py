@@ -90,6 +90,9 @@ class UDPBuffer:
             self.display_video_semaphore.release()
             sleep(self.__time_between_frames)
 
+    def get_statistics(self) -> Tuple[BufferQuality, int, float]:
+        return self._buffer_quality, self.__packages_lost, self.__delay_sum/(len(self._buffer)+1)  # TODO
+
     def insert(self, datagram: UDPDatagram) -> bool:
         """
         Inserts the specified datagram in the buffer, preserving the order. It discards the datagram if it's too old
@@ -105,6 +108,7 @@ class UDPBuffer:
 
             # Update time_between_frames
             self.__time_between_frames = UDPBuffer.U*1/datagram.fps + (1 - UDPBuffer.U)*self.__time_between_frames
+
             buffer_len = len(self._buffer)
             if buffer_len >= UDPBuffer.BUFFER_MAX:
                 self.__time_between_frames /= UDPBuffer.CONSUME_SPEEDUP
@@ -150,18 +154,18 @@ class UDPBuffer:
                 self._buffer_quality = BufferQuality.LOW
             return True
 
-    def consume(self) -> Tuple[bytes, BufferQuality]:
+    def consume(self) -> bytes:
         """
         Consumes first datagram of the buffer, returning its data and the current buffer quality
-        :return: consumed_datagram.data, quality
+        :return: consumed_datagram.data
         """
         with self.__mutex:
             now = default_timer()
             if self.__last_consumed is not None and now - self.__last_consumed < self.__time_between_frames:
-                return bytes(), BufferQuality.MEDIUM
+                return bytes()
 
             if not self._buffer or self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
-                return bytes(), BufferQuality.SUPER_LOW
+                return bytes()
 
             # Update last time consumed
             self.__last_consumed = now
@@ -171,9 +175,10 @@ class UDPBuffer:
             self.__delay_sum -= consumed_datagram.delay_ts
             quality = self._buffer_quality
 
+            # TODO
             if not self._buffer:
                 self._buffer_quality = BufferQuality.SUPER_LOW
             else:
                 self.__packages_lost -= self._buffer[0].seq_number - consumed_datagram.seq_number - 1
 
-            return consumed_datagram.data, quality
+            return consumed_datagram.data
