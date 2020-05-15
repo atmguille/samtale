@@ -228,13 +228,19 @@ class VideoClient:
                 local_frame = self.last_local_frame
             # Fetch remote frame
             remote_frame, quality = self.udp_buffer.consume()
-
-            now = default_timer()
-            if quality < BufferQuality.MEDIUM and last_congested \
-                    and now - last_congested > VideoClient.CONGESTED_INTERVAL \
-                    and self.call_control.in_call():
-                last_congested = now
-                self.call_control.call_congested()
+            # If we are using V0, decrease our video quality (assuming that the connection is symmetric)
+            # If V1 (or higher) is used, we will send a CALL_CONGESTED to the other end
+            if self.call_control.in_call() and quality < BufferQuality.MEDIUM:
+                print(quality.name)
+                if self.call_control.protocol == "V0":
+                    self.extreme_compression = True
+                else:
+                    now = default_timer()
+                    if now - last_congested > VideoClient.CONGESTED_INTERVAL:
+                        last_congested = now
+                        self.call_control.call_congested()
+            else:
+                self.extreme_compression = False
 
             if not remote_frame and self.call_control.in_call():
                 remote_frame = self.last_remote_frame
