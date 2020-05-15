@@ -162,7 +162,7 @@ class VideoClient:
         self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=1, column=0)
         self.gui.addStatusbar(fields=3)
         self.gui.setStatusbar("Buffer Quality: N/A", 0)
-        self.gui.setStatusbar("Packages lost : N/A", 1)
+        self.gui.setStatusbar("Packages lost: N/A", 1)
         self.gui.setStatusbar("Delay avg: N/A", 2)
 
         # Initialize threads
@@ -266,14 +266,14 @@ class VideoClient:
                 mini_frame = cv2.resize(local_frame, (mini_frame_width, mini_frame_height))
                 remote_frame[-mini_frame_height - margin:-margin, -mini_frame_width - margin:-margin] = mini_frame
 
-                self.gui.setStatusbar(f"Buffer Quality: {quality}", 0)
-                self.gui.setStatusbar(f"Packages lost : {packages_lost}", 1)
+                self.gui.setStatusbar(f"Buffer Quality: {quality.name}", 0)
+                self.gui.setStatusbar(f"Packages lost: {packages_lost}", 1)
                 self.gui.setStatusbar(f"Delay avg: {delay_avg}", 2)
 
                 self.show_video(remote_frame)
             elif not remote_frame:
                 self.gui.setStatusbar("Buffer Quality: N/A", 0)
-                self.gui.setStatusbar("Packages lost : N/A", 1)
+                self.gui.setStatusbar("Packages lost: N/A", 1)
                 self.gui.setStatusbar("Delay avg: N/A", 2)
                 self.show_video(local_frame)
 

@@ -71,6 +71,7 @@ class UDPBuffer:
         self.__last_seq_number = -1
         self.__mutex = Lock()
         self._buffer_quality = BufferQuality.SUPER_LOW
+        self.__num_holes = 0  # Number of missing packages in the buffer
         self.__packages_lost = 0
         self.__delay_sum = 0
         self.__initial_frames = 0
@@ -91,7 +92,12 @@ class UDPBuffer:
             sleep(self.__time_between_frames)
 
     def get_statistics(self) -> Tuple[BufferQuality, int, float]:
-        return self._buffer_quality, self.__packages_lost, self.__delay_sum/(len(self._buffer)+1)  # TODO
+        if self._buffer:
+            delay_avg = self.__delay_sum/len(self._buffer)
+        else:
+            delay_avg = 0
+
+        return self._buffer_quality, self.__packages_lost, delay_avg
 
     def insert(self, datagram: UDPDatagram) -> bool:
         """
@@ -128,7 +134,7 @@ class UDPBuffer:
 
             # If datagram should be the first element
             if self._buffer[0].seq_number > datagram.seq_number:
-                self.__packages_lost += self._buffer[0].seq_number - datagram.seq_number - 1
+                self.__num_holes += self._buffer[0].seq_number - datagram.seq_number - 1
                 self._buffer.insert(0, datagram)
                 self.__delay_sum += datagram.delay_ts
 
@@ -136,16 +142,16 @@ class UDPBuffer:
                 for i in range(buffer_len - 1, -1, -1):
                     if self._buffer[i].seq_number < datagram.seq_number:
                         if i + 1 < buffer_len:
-                            self.__packages_lost -= 1  # Since package is inserted in the middle, there is one less lost
+                            self.__num_holes -= 1  # Since package is inserted in the middle, there is one less lost
                         else:
-                            self.__packages_lost += datagram.seq_number - self._buffer[i].seq_number - 1
+                            self.__num_holes += datagram.seq_number - self._buffer[i].seq_number - 1
 
                         self.__delay_sum += datagram.delay_ts
                         self._buffer.insert(i + 1, datagram)
                         break
 
             # Recompute buffer_quality
-            score = self.__packages_lost + 100 * (self.__delay_sum / (buffer_len + 1))
+            score = self.__num_holes + 100 * (self.__delay_sum / (buffer_len + 1))
             if score < 5:
                 self._buffer_quality = BufferQuality.HIGH
             elif score < 20:
@@ -171,14 +177,15 @@ class UDPBuffer:
             self.__last_consumed = now
 
             consumed_datagram = self._buffer.pop(0)
+            # Update packages that have not been definitely lost
+            self.__packages_lost += consumed_datagram.seq_number - self.__last_seq_number - 1
             self.__last_seq_number = consumed_datagram.seq_number
             self.__delay_sum -= consumed_datagram.delay_ts
-            quality = self._buffer_quality
 
             # TODO
             if not self._buffer:
                 self._buffer_quality = BufferQuality.SUPER_LOW
             else:
-                self.__packages_lost -= self._buffer[0].seq_number - consumed_datagram.seq_number - 1
+                self.__num_holes -= self._buffer[0].seq_number - consumed_datagram.seq_number - 1
 
             return consumed_datagram.data
