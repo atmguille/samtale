@@ -31,7 +31,7 @@ class CaptureMode(Enum):
 class VideoClient:
     APP_NAME = "Samtale"
     APP_WIDTH = 800
-    APP_HEIGHT = 525
+    APP_HEIGHT = 550
     VIDEO_WIDTH = 640
     VIDEO_HEIGHT = 480
 
@@ -160,6 +160,10 @@ class VideoClient:
         self.gui.setStretch("both")
         self.gui.setSticky("new")
         self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=1, column=0)
+        self.gui.addStatusbar(fields=3)
+        self.gui.setStatusbar("Buffer Quality: N/A", 0)
+        self.gui.setStatusbar("Packages lost : N/A", 1)
+        self.gui.setStatusbar("Delay avg: N/A", 2)
 
         # Initialize threads
         start_control_thread = self.configuration.status == ConfigurationStatus.LOADED
