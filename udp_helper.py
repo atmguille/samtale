@@ -8,6 +8,14 @@ from threading import Lock, Semaphore, Thread
 
 class UDPDatagram:
     def __init__(self, seq_number: int, resolution: str, fps: float, data: bytes, ts: float = None):
+        """
+        Constructor
+        :param seq_number
+        :param resolution
+        :param fps
+        :param data
+        :param ts: timestamp. If not specified, it will be set to time.time()
+        """
         self.seq_number = seq_number
         self.sent_ts = ts if ts is not None else time()
         self.resolution = resolution
@@ -31,6 +39,11 @@ class UDPDatagram:
 
 
 def udp_datagram_from_msg(message: bytes) -> UDPDatagram:
+    """
+    Builds a UDPDatagram object from a message
+    :param message
+    :return: UDPDatagram object built
+    """
     # Find the fourth '#' to split the message (we cannot use split because the binary data could contain '#')
     count = 0
     for index, c in enumerate(map(chr, message)):
@@ -67,6 +80,10 @@ class UDPBuffer:
     MAXIMUM_DELAY = 400  # (measured in ms)
 
     def __init__(self, display_video_semaphore: Semaphore):
+        """
+        Constructor
+        :param display_video_semaphore: semaphore to be released when displayer should consume
+        """
         self._buffer = []
         self.__last_seq_number = 0
         self.__mutex = Lock()
@@ -92,6 +109,9 @@ class UDPBuffer:
             sleep(self.__time_between_frames)
 
     def get_statistics(self) -> Tuple[BufferQuality, int, float]:
+        """
+        :return: buffer quality, packages lost, average delay
+        """
         return self._buffer_quality, self.__packages_lost, self.__avg_delay
 
     def insert(self, datagram: UDPDatagram) -> bool:
@@ -165,7 +185,7 @@ class UDPBuffer:
 
     def consume(self) -> bytes:
         """
-        Consumes first datagram of the buffer, returning its data and the current buffer quality
+        Consumes first datagram of the buffer, returning its data and updating buffer statistics
         :return: consumed_datagram.data
         """
         with self.__mutex:
