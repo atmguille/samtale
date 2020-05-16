@@ -426,15 +426,18 @@ class VideoClient:
                                        dirName=getcwd(),
                                        multiple=False)
                 if not ret:
+                    get_logger().info("No video file selected")
                     return
                 try:
                     capture = cv2.VideoCapture(ret)
                     success, _ = capture.read()
                     if not success:
+                        get_logger().warning(f"Couldn't open {ret} as a video file")
                         self.display_message("File not valid",
                                              f"Could't open {ret} as a video file")
                         return
                     with self.capture_lock:
+                        get_logger().info(f"File {ret} loaded")
                         self.capture_mode = CaptureMode.FILE
                         self.capture = capture
                         self.video_current_frame = 1
