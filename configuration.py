@@ -1,5 +1,4 @@
 import configparser
-import logging
 from enum import Enum, auto
 import os
 from typing import Tuple
@@ -38,7 +37,7 @@ class Configuration:
                 tcp_port = int(self.config["Configuration"]["tcp_port"])
                 udp_port = int(self.config["Configuration"]["udp_port"])
                 private_ip = self.config["Configuration"]["private_ip"] == "True"
-                get_logger().log(logging.DEBUG, "Configuration file read")
+                get_logger().debug("Configuration file read")
 
                 CurrentUser(nickname, "V0#V1", tcp_port, password, udp_port=udp_port, private_ip=private_ip)
                 # Check if the password is correct
@@ -50,11 +49,11 @@ class Configuration:
 
             except KeyError as e:
                 # File is corrupted or has been tampered
-                get_logger().log(logging.WARNING, f"Error reading configuration file: {e}")
+                get_logger().warning(f"Error reading configuration file: {e}")
                 self.status = ConfigurationStatus.WRONG_FILE
         else:
             # No configuration file found
-            get_logger().log(logging.INFO, "No configuration file found")
+            get_logger().info("No configuration file found")
             self.status = ConfigurationStatus.NO_FILE
 
     def load(self, nickname: str, password: str, tcp_port: int, udp_port: int, private_ip: bool,
@@ -75,7 +74,7 @@ class Configuration:
         try:
             register()
         except RegisterFailed:
-            get_logger().log(logging.WARNING, f"Couldn't sign in as {nickname}. "
+            get_logger().warning(f"Couldn't sign in as {nickname}. "
                                               f"The password is probably not correct")
             self.status = ConfigurationStatus.WRONG_PASSWORD
             return "Wrong Password", f"The provided password for {nickname} was not correct"
@@ -93,7 +92,7 @@ class Configuration:
             with open(Configuration.CONFIGURATION_FILENAME, "w") as f:
                 self.config.write(f)
 
-            get_logger().log(logging.DEBUG, f"User information saved into configuration file")
+            get_logger().debug(f"User information saved into configuration file")
 
         return "Registration successfully", f"You were registered successfully as {nickname}"
 
