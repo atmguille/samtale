@@ -8,8 +8,6 @@ from discovery_server import get_user, UserUnknown, BadUser
 from logger import get_logger
 from user import User, CurrentUser
 
-BUFFER_SIZE = 1024
-
 
 def _open_tcp_socket(src_user: User) -> socket:
     """
@@ -277,7 +275,7 @@ class CallControl:
             connection.settimeout(3)
 
             try:
-                response = connection.recv(BUFFER_SIZE).decode().split()
+                response = connection.recv(CallControl.BUFFER_SIZE).decode().split()
                 get_logger().debug(f"Received via control connection: {response}")
 
                 self.call_lock.acquire()
@@ -340,7 +338,7 @@ class CallControl:
                     self.video_client.extreme_compression = False
 
             try:
-                response = self.call_socket.recv(BUFFER_SIZE)
+                response = self.call_socket.recv(CallControl.BUFFER_SIZE)
                 get_logger().debug(f"{self.dst_user.nick} sent: {response}")
             except socket.error:
                 self._call_end()
