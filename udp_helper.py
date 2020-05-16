@@ -5,6 +5,8 @@ from functools import total_ordering
 from enum import Enum, auto
 from threading import Lock, Semaphore, Thread
 
+from logger import get_logger
+
 
 class UDPDatagram:
     def __init__(self, seq_number: int, resolution: str, fps: float, data: bytes, ts: float = None):
@@ -30,6 +32,8 @@ class UDPDatagram:
         """
         self.received_ts = time()
         self.delay_ts = (self.received_ts - self.sent_ts) * 1000
+        if self.delay_ts:
+            get_logger().warning(f"Negative delay of {self.delay_ts}. The clocks are probably not synced.")
 
     def __str__(self):
         return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#" + self.data.decode()
