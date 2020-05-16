@@ -25,8 +25,11 @@ MAX_DATAGRAM_SIZE = 65_507
 
 
 class CaptureMode(Enum):
+    # The video is provided by a webcam (video0 by default)
     CAMERA = auto()
-    VIDEO = auto()
+    # The video is provided by a file
+    FILE = auto()
+    # There's no video, just an image showing that there's no webcam (on video0)
     NO_CAMERA = auto()
 
 
@@ -37,76 +40,36 @@ class VideoClient:
     VIDEO_WIDTH = 640
     VIDEO_HEIGHT = 480
 
+    # On V1+, the CALL_CONGESTED message will be sent at most once every CONGEST_INTERVAL seconds
     CONGESTED_INTERVAL = 30
+    # On NO_CAMERA mode, the static image will be set NO_CAMERA_FPS per second
+    NO_CAMERA_FPS = 30
+    NO_CAMERA_IMAGE = "no_camera.bmp"
 
-    REMEMBER_USER_CHECKBOX = "Remember me"
-    USE_PRIVATE_IP = "Use private ip?"
-    REGISTER_SUBWINDOW = "Register"
-    NICKNAME_WIDGET = "Nickname"
-    PASSWORD_WIDGET = "Password"
-    TCP_PORT_WIDGET = "TCP Port"
-    UDP_PORT_WIDGET = "UDP Port"
+    # Widgets
     SUBMIT_BUTTON = "Submit"
-    VIDEO_WIDGET_NAME = "video"
     CONNECT_BUTTON = "Connect"
     HOLD_BUTTON = "Hold"
     RESUME_BUTTON = "Resume"
     END_BUTTON = "End Call"
     REGISTER_BUTTON = "Register"
-    USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
     SELECT_VIDEO_BUTTON = "Select video"
     CLEAR_VIDEO_BUTTON = "Clear video"
+    NICKNAME_ENTRY = "Nickname"
+    PASSWORD_ENTRY = "Password"
+    TCP_PORT_ENTRY = "TCP Port"
+    UDP_PORT_ENTRY = "UDP Port"
+    REMEMBER_USER_CHECKBOX = "Remember me"
+    PRIVATE_IP_CHECKBOX = "Use private ip?"
     TYPE_NICKNAME_LABEL = "Type nickname:"
-
-    NO_CAMERA_FPS = 30
-
-    def receive_video(self):
-        while True:
-            data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
-            if self.call_control.should_video_flow() and addr[0] == self.call_control.get_send_address()[0]:
-                udp_datagram = udp_datagram_from_msg(data)
-                self.udp_buffer.insert(udp_datagram)
-
-    def capture_and_send_video(self):
-        while True:
-            # Fetch webcam frame
-            local_frame = self.get_frame()
-            # Notify visualization thread
-            self.camera_buffer.put(local_frame)
-            self.video_semaphore.release()
-            # Compress local frame to send it via the socket
-            if self.call_control.should_video_flow():
-
-                if self.extreme_compression:
-                    video_width = VideoClient.VIDEO_WIDTH // 2
-                    video_height = VideoClient.VIDEO_HEIGHT // 2
-                    local_frame = cv2.resize(local_frame, (video_width, video_height))
-                else:
-                    video_width = VideoClient.VIDEO_WIDTH
-                    video_height = VideoClient.VIDEO_HEIGHT
-
-                success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
-                if not success:
-                    raise Exception("Error compressing the image")
-                compressed_local_frame = compressed_local_frame.tobytes()
-                sequence_number = self.call_control.get_sequence_number()
-                if sequence_number < 0:
-                    continue
-
-                udp_datagram = UDPDatagram(sequence_number,
-                                           f"{video_width}x{video_height}",
-                                           self.fps,
-                                           compressed_local_frame).encode()
-
-                assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
-
-                address = self.call_control.get_send_address()
-                if address:
-                    self.send_socket.sendto(udp_datagram, address)
-
-            sleep(1 / self.fps)
+    REGISTER_SUBWINDOW = "Register"
+    VIDEO_WIDGET_NAME = "video"
+    USER_SELECTOR_WIDGET = "USER_SELECTOR_WIDGET"
 
     def __init__(self):
+        """
+        Initializes the GUI, reads the configuration and creates the necessary threads and sockets
+        """
         self.gui = gui(VideoClient.APP_NAME, f"{VideoClient.APP_WIDTH}x{VideoClient.APP_HEIGHT}", handleArgs=False)
         self.gui.setLogLevel("WARNING")
         self.gui.setResizable(False)
@@ -179,10 +142,73 @@ class VideoClient:
         # Set end function to hung up call if X button is pressed
         self.gui.setStopFunction(self.stop)
 
+    def receive_video(self):
+        """
+        This function will receive data from the UDP socket. After checking that the video should indeed flow
+        (a not-that-good-programmed client might send us video even if the video is on pause), it inserts the datagram
+        into the UDPBuffer. This function is meant to be run on a separate thread.
+        """
+        while True:
+            data, addr = self.receive_socket.recvfrom(MAX_DATAGRAM_SIZE)
+            if self.call_control.should_video_flow() and addr[0] == self.call_control.get_send_address()[0]:
+                udp_datagram = udp_datagram_from_msg(data)
+                self.udp_buffer.insert(udp_datagram)
+
+    def capture_and_send_video(self):
+        """
+        This function will capture video from the preferred source (webcam, file or static image), insert it into a
+        queue (so the visualization thread can play it) and send it to the other end in the case that we are in a call
+        and the video should flow. This function is meant to be run on a separate thread.
+        """
+        while True:
+            # Fetch webcam frame
+            local_frame = self.get_frame()
+            # Notify visualization thread
+            self.camera_buffer.put(local_frame)
+            self.video_semaphore.release()
+            # Compress local frame to send it via the socket
+            if self.call_control.should_video_flow():
+                if self.extreme_compression:
+                    # If the connection quality is not that good, we shrink the image that we'll send
+                    video_width = VideoClient.VIDEO_WIDTH // 2
+                    video_height = VideoClient.VIDEO_HEIGHT // 2
+                    local_frame = cv2.resize(local_frame, (video_width, video_height))
+                else:
+                    video_width = VideoClient.VIDEO_WIDTH
+                    video_height = VideoClient.VIDEO_HEIGHT
+
+                success, compressed_local_frame = cv2.imencode(".jpg", local_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                if not success:
+                    raise Exception("Error compressing the image")
+                compressed_local_frame = compressed_local_frame.tobytes()
+                sequence_number = self.call_control.get_sequence_number()
+                if sequence_number < 0:
+                    continue
+
+                udp_datagram = UDPDatagram(sequence_number,
+                                           f"{video_width}x{video_height}",
+                                           self.fps,
+                                           compressed_local_frame).encode()
+
+                assert (len(udp_datagram) <= MAX_DATAGRAM_SIZE)
+
+                address = self.call_control.get_send_address()
+                if address:
+                    self.send_socket.sendto(udp_datagram, address)
+
+            sleep(1 / self.fps)
+
     def start(self):
+        """
+        Runs the GUI. This function won't return until the X is pressed
+        """
         self.gui.go()
 
     def stop(self) -> bool:
+        """
+        This function will be called just before the GUI closes
+        :return: true (so the GUI will definitely close)
+        """
         if self.call_control.in_call():
             self.call_control.call_end()
         # Close sockets
@@ -194,33 +220,56 @@ class VideoClient:
         return True
 
     def get_frame(self):
+        """
+        Captures a frame using the selected capture mode.
+        :return:
+        """
         with self.capture_lock:
             if self.capture_mode == CaptureMode.NO_CAMERA:
-                frame = cv2.imread("no_camera.bmp")
+                frame = cv2.imread(VideoClient.NO_CAMERA_IMAGE)
             else:
                 success, frame = self.capture.read()
                 if not success:
-                    frame = cv2.imread("no_camera.bmp")
+                    frame = cv2.imread(VideoClient.NO_CAMERA_IMAGE)
                 else:
                     if self.capture_mode == CaptureMode.CAMERA:
+                        # Flip the image so it has the natural orientation
                         frame = cv2.flip(frame, 1)
-                    elif self.capture_mode == CaptureMode.VIDEO:
+                    elif self.capture_mode == CaptureMode.FILE:
+                        # Update the current video frame number
                         self.video_current_frame += 1
 
+                        # If the reached the end of the video file, we'll start back again
                         if self.video_current_frame == self.capture.get(cv2.CAP_PROP_FRAME_COUNT):
                             self.video_current_frame = 0
                             self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-            return cv2.resize(frame, (640, 480), interpolation=cv2.INTER_AREA)
+            return cv2.resize(frame, (VideoClient.VIDEO_WIDTH, VideoClient.VIDEO_HEIGHT), interpolation=cv2.INTER_AREA)
 
     @staticmethod
     def get_image(frame):
+        """
+        :param frame: a frame returned by the get_frame function
+        :return: an image that can be displayed on the GUI
+        """
         return ImageTk.PhotoImage(Image.fromarray(frame))
 
-    def show_video(self, frame):
+    def display_frame(self, frame):
+        """
+        Displays the frame on the GUI
+        :param frame: a frame returned by the get_frame function
+        """
         self.gui.setImageData(VideoClient.VIDEO_WIDGET_NAME, self.get_image(frame), fmt="PhotoImage")
 
     def display_video(self):
+        """
+        This function is meant to run on a separate thread. It will block until someone wakes it (the capture_video
+        thread or the waker thread). Two "frozen" frames are stored, one for the local one and one for the remote one.
+        If data cannot be consumed from the local video feed or from the UDPBuffer, a frozen frame will be shown. If
+        we are in a call, our image will be shown in a small rectangle at the bottom right (with 1/16th of the original
+        area). It will also check if the buffer quality is bad in order to take measures (which will vary of with the
+        protocol version being used)
+        """
         # Do first acquire so next one is blocking
         self.video_semaphore.acquire()
         last_congested = 0
@@ -267,14 +316,18 @@ class VideoClient:
                 self.gui.setStatusbar(f"Packages lost: {packages_lost}", 1)
                 self.gui.setStatusbar(f"Delay avg (ms): {round(delay_avg, ndigits=2)}", 2)
 
-                self.show_video(remote_frame)
+                self.display_frame(remote_frame)
             elif not remote_frame:
                 self.gui.setStatusbar("Call Quality: N/A", 0)
                 self.gui.setStatusbar("Packages lost: N/A", 1)
                 self.gui.setStatusbar("Delay avg (ms): N/A", 2)
-                self.show_video(local_frame)
+                self.display_frame(local_frame)
 
     def buttons_callback(self, name: str):
+        """
+        All buttons have this function as callback
+        :param name: name of the button
+        """
         if name == VideoClient.REGISTER_BUTTON:
             if self.configuration.status != ConfigurationStatus.LOADED:
                 try:
@@ -282,18 +335,18 @@ class VideoClient:
                     self.gui.startSubWindow(VideoClient.REGISTER_SUBWINDOW)
                     self.gui.setSize(300, 200)
 
-                    self.gui.addEntry(VideoClient.NICKNAME_WIDGET)
-                    self.gui.setEntryDefault(VideoClient.NICKNAME_WIDGET, VideoClient.NICKNAME_WIDGET)
-                    self.gui.addSecretEntry(VideoClient.PASSWORD_WIDGET)
-                    self.gui.setEntryDefault(VideoClient.PASSWORD_WIDGET, VideoClient.PASSWORD_WIDGET)
-                    self.gui.addNumericEntry(VideoClient.TCP_PORT_WIDGET)
-                    self.gui.setEntryDefault(VideoClient.TCP_PORT_WIDGET, VideoClient.TCP_PORT_WIDGET)
-                    self.gui.addNumericEntry(VideoClient.UDP_PORT_WIDGET)
-                    self.gui.setEntryDefault(VideoClient.UDP_PORT_WIDGET, VideoClient.UDP_PORT_WIDGET)
+                    self.gui.addEntry(VideoClient.NICKNAME_ENTRY)
+                    self.gui.setEntryDefault(VideoClient.NICKNAME_ENTRY, VideoClient.NICKNAME_ENTRY)
+                    self.gui.addSecretEntry(VideoClient.PASSWORD_ENTRY)
+                    self.gui.setEntryDefault(VideoClient.PASSWORD_ENTRY, VideoClient.PASSWORD_ENTRY)
+                    self.gui.addNumericEntry(VideoClient.TCP_PORT_ENTRY)
+                    self.gui.setEntryDefault(VideoClient.TCP_PORT_ENTRY, VideoClient.TCP_PORT_ENTRY)
+                    self.gui.addNumericEntry(VideoClient.UDP_PORT_ENTRY)
+                    self.gui.setEntryDefault(VideoClient.UDP_PORT_ENTRY, VideoClient.UDP_PORT_ENTRY)
 
                     self.gui.addCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
                     self.gui.setCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
-                    self.gui.addCheckBox(VideoClient.USE_PRIVATE_IP)
+                    self.gui.addCheckBox(VideoClient.PRIVATE_IP_CHECKBOX)
                     self.gui.addButton(VideoClient.SUBMIT_BUTTON, self.buttons_callback)
                 except ItemLookupError:
                     # The register window has already been launched in the session
@@ -346,11 +399,11 @@ class VideoClient:
 
         elif name == VideoClient.SUBMIT_BUTTON:
             persistent = self.gui.getCheckBox(VideoClient.REMEMBER_USER_CHECKBOX)
-            private_ip = self.gui.getCheckBox(VideoClient.USE_PRIVATE_IP)
-            title, message = self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_WIDGET),
-                                                     self.gui.getEntry(VideoClient.PASSWORD_WIDGET),
-                                                     int(self.gui.getEntry(VideoClient.TCP_PORT_WIDGET)),
-                                                     int(self.gui.getEntry(VideoClient.UDP_PORT_WIDGET)),
+            private_ip = self.gui.getCheckBox(VideoClient.PRIVATE_IP_CHECKBOX)
+            title, message = self.configuration.load(self.gui.getEntry(VideoClient.NICKNAME_ENTRY),
+                                                     self.gui.getEntry(VideoClient.PASSWORD_ENTRY),
+                                                     int(self.gui.getEntry(VideoClient.TCP_PORT_ENTRY)),
+                                                     int(self.gui.getEntry(VideoClient.UDP_PORT_ENTRY)),
                                                      persistent=persistent,
                                                      private_ip=private_ip)
             self.gui.hideSubWindow(VideoClient.REGISTER_SUBWINDOW)
@@ -374,7 +427,7 @@ class VideoClient:
                                              f"Could't open {ret} as a video file")
                         return
                     with self.capture_lock:
-                        self.capture_mode = CaptureMode.VIDEO
+                        self.capture_mode = CaptureMode.FILE
                         self.capture = capture
                         self.video_current_frame = 1
                         self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
@@ -396,29 +449,57 @@ class VideoClient:
 
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.SELECT_VIDEO_BUTTON)
 
-    def incoming_call(self, username: str, ip: str) -> bool:
+    def incoming_call(self, nickname: str, ip: str) -> bool:
+        """
+        This function will be called when there's an incoming call
+        :param nickname: nickname of the user
+        :param ip: the actual IP address of the user
+        :return: true if the call is accepted and false otherwise
+        """
         accept = self.gui.yesNoBox("Incoming call",
-                                   f"The user {username} is calling from {ip}. Do you want to accept the call?")
+                                   f"The user {nickname} is calling from {ip}. Do you want to accept the call?")
 
         return accept
 
     def display_message(self, title: str, message: str):
+        """
+        Displays a message on the GUI
+        :param title: title of the window that will be created
+        :param message: message that will be displayed
+        """
         self.gui.infoBox(title, message)
 
     def flush_buffer(self):
+        """
+        This function will be called when a call ends. It will flush the UDPBuffer and delete the "frozen" remote frame
+        """
         del self.udp_buffer
         self.last_remote_frame = None
         self.udp_buffer = UDPBuffer(self.video_semaphore)
 
-    def display_calling(self, nick: str):
+    def display_calling(self, nickname: str):
+        """
+        This function will be called when calling someone.
+        Changes the connect button name to: Calling <nickname>
+        :param nickname: nickname of the user that is being called
+        """
         self.gui.setButton(VideoClient.CONNECT_BUTTON,
-                           f"Calling {nick}...")
+                           f"Calling {nickname}...")
 
-    def display_in_call(self, nick: str):
+    def display_in_call(self, nickname: str):
+        """
+        This function will be called when a call is stablished.
+        Changes the connect button name to: In a call with <nickname>
+        :param nickname: nickname of the user whom the are talking to
+        """
         self.gui.setButton(VideoClient.CONNECT_BUTTON,
-                           f"In a call with {nick}")
+                           f"In a call with {nickname}")
 
     def display_connect(self):
+        """
+        This function will be called when a call ends. Changes the connect and hold buttons names to the default ones.
+        :return:
+        """
         self.gui.setButton(VideoClient.CONNECT_BUTTON,
                            VideoClient.CONNECT_BUTTON)
         self.gui.setButton(VideoClient.HOLD_BUTTON, VideoClient.HOLD_BUTTON)

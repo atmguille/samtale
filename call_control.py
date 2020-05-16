@@ -178,7 +178,7 @@ class CallControl:
         """
         Checks if a call can be started before calling _call_start in a separate Thread. By this, deadlock is avoided if
         two call_start are executed before the first one have an answer
-        :param nickname: nick of the user to be called
+        :param nickname: nickname of the user to be called
         """
         self.call_lock.acquire()
         if self._in_call:
