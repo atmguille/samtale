@@ -93,9 +93,11 @@ class VideoClient:
 
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
+            get_logger().info("No camera mode enabled")
             self.capture_mode = CaptureMode.NO_CAMERA
             self.fps = VideoClient.NO_CAMERA_FPS
         else:
+            get_logger().info("Camera mode enabled")
             self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
 
         # Add widgets
@@ -211,6 +213,8 @@ class VideoClient:
         This function will be called just before the GUI closes
         :return: true (so the GUI will definitely close)
         """
+        get_logger().info(f"Closing {VideoClient.APP_NAME}")
+
         if self.call_control.in_call():
             self.call_control.call_end()
         # Close sockets
@@ -386,21 +390,21 @@ class VideoClient:
             if self.configuration.status == ConfigurationStatus.LOADED:
                 nickname = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
                 if nickname == CurrentUser().nick:
-                    get_logger().info("Blocked attempt you call ourselves")
+                    get_logger().info("Blocked attempt to call ourselves")
                     self.display_message("Not Allowed", "You can't call yourself!")
                 else:
                     self.call_control.call_start(nickname)
             elif self.configuration.status == ConfigurationStatus.NO_FILE:
-                get_logger().info("Cannot call prior registration (no configuration file)")
+                get_logger().info("Cannot call before registering (no configuration file found)")
                 self.display_message("Registration needed",
                                      "You have to register since no configuration.ini was found at program launch")
             elif self.configuration.status == ConfigurationStatus.WRONG_PASSWORD:
-                get_logger().info("Cannot call prior registration (wrong password)")
+                get_logger().info("Cannot call before registering (last time a wrong password was provided)")
                 self.display_message("Registration needed",
                                      "You have to register again since the password provided in the configuration.ini "
                                      "file was not correct")
             elif self.configuration.status == ConfigurationStatus.WRONG_FILE:
-                get_logger().info("Cannot call prior registration (wrong file)")
+                get_logger().info("Cannot call before registering (the file read last time wasn't correct)")
                 self.display_message("Registration needed",
                                      "You have to register again since an error occurred reading the configuration.ini "
                                      "file")
@@ -426,15 +430,18 @@ class VideoClient:
                                        dirName=getcwd(),
                                        multiple=False)
                 if not ret:
+                    get_logger().info("No video file selected")
                     return
                 try:
                     capture = cv2.VideoCapture(ret)
                     success, _ = capture.read()
                     if not success:
+                        get_logger().warning(f"Couldn't open {ret} as a video file")
                         self.display_message("File not valid",
                                              f"Could't open {ret} as a video file")
                         return
                     with self.capture_lock:
+                        get_logger().info(f"File {ret} loaded")
                         self.capture_mode = CaptureMode.FILE
                         self.capture = capture
                         self.video_current_frame = 1
@@ -449,13 +456,17 @@ class VideoClient:
                     with self.capture_lock:
                         self.capture = cv2.VideoCapture(0)
                         if not self.capture.isOpened():
+                            get_logger().info("No camera mode enabled")
                             self.capture_mode = CaptureMode.NO_CAMERA
                             self.fps = VideoClient.NO_CAMERA_FPS
                         else:
+                            get_logger().info("Camera mode enabled")
                             self.fps = int(self.capture.get(cv2.CAP_PROP_FPS))
                             self.capture_mode = CaptureMode.CAMERA
 
                         self.gui.setButton(VideoClient.SELECT_VIDEO_BUTTON, VideoClient.SELECT_VIDEO_BUTTON)
+                else:
+                    get_logger().info("Video was not cleared")
 
     def incoming_call(self, nickname: str, ip: str) -> bool:
         """
