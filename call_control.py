@@ -275,8 +275,9 @@ class CallControl:
             connection.settimeout(3)
 
             try:
-                response = connection.recv(CallControl.BUFFER_SIZE).decode().split()
+                response = connection.recv(CallControl.BUFFER_SIZE)
                 get_logger().debug(f"Received via control connection: {response}")
+                response = response.decode().split()
 
                 self.call_lock.acquire()
                 if self._in_call or self._waiting:
@@ -320,7 +321,7 @@ class CallControl:
                     connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
                 self.call_lock.release()
             except (ValueError, IndexError):
-                get_logger().error(f"Error parsing control message: {response}")
+                get_logger().error(f"Error parsing control message")
                 connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
                 self.call_lock.release()
 
@@ -347,6 +348,7 @@ class CallControl:
                 response = response.decode().split()
                 # If socket is closed, no exception is thrown but response is empty
                 if not response:
+                    get_logger().info(f"The call with {self.dst_user.nick} has timed out")
                     self._call_end()
                     break
                 if response[0] == "CALL_HOLD":
