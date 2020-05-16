@@ -1,4 +1,3 @@
-import logging
 import queue
 import socket
 import argparse
@@ -331,7 +330,7 @@ class VideoClient:
         """
         if name == VideoClient.REGISTER_BUTTON:
             if self.configuration.status != ConfigurationStatus.LOADED:
-                logger.get_logger().log(logging.INFO, "Opening register window")
+                logger.get_logger().info("Opening register window")
                 try:
                     # Load the register window
                     self.gui.startSubWindow(VideoClient.REGISTER_SUBWINDOW)
@@ -356,7 +355,7 @@ class VideoClient:
 
                 self.gui.showSubWindow(VideoClient.REGISTER_SUBWINDOW)
             else:
-                logger.get_logger().log(logging.INFO, "Opening profile window")
+                logger.get_logger().info("Opening profile window")
                 ret = self.gui.okBox(f"Registered as {CurrentUser().nick}",
                                      f"You are already registered:\n\n"
                                      f" · nickname:\t{CurrentUser().nick}\n"
@@ -385,21 +384,21 @@ class VideoClient:
             if self.configuration.status == ConfigurationStatus.LOADED:
                 nickname = self.gui.getEntry(VideoClient.USER_SELECTOR_WIDGET)
                 if nickname == CurrentUser().nick:
-                    logger.get_logger().log(logging.INFO, "Blocked attempt you call ourselves")
+                    logger.get_logger().info("Blocked attempt you call ourselves")
                     self.display_message("Not Allowed", "You can't call yourself!")
                 else:
                     self.call_control.call_start(nickname)
             elif self.configuration.status == ConfigurationStatus.NO_FILE:
-                logger.get_logger().log(logging.INFO, "Cannot call prior registration (no configuration file)")
+                logger.get_logger().info("Cannot call prior registration (no configuration file)")
                 self.display_message("Registration needed",
                                      "You have to register since no configuration.ini was found at program launch")
             elif self.configuration.status == ConfigurationStatus.WRONG_PASSWORD:
-                logger.get_logger().log(logging.INFO, "Cannot call prior registration (wrong password)")
+                logger.get_logger().info("Cannot call prior registration (wrong password)")
                 self.display_message("Registration needed",
                                      "You have to register again since the password provided in the configuration.ini "
                                      "file was not correct")
             elif self.configuration.status == ConfigurationStatus.WRONG_FILE:
-                logger.get_logger().log(logging.INFO, "Cannot call prior registration (wrong file)")
+                logger.get_logger().info("Cannot call prior registration (wrong file)")
                 self.display_message("Registration needed",
                                      "You have to register again since an error occurred reading the configuration.ini "
                                      "file")
@@ -480,7 +479,7 @@ class VideoClient:
         """
         This function will be called when a call ends. It will flush the UDPBuffer and delete the "frozen" remote frame
         """
-        logger.get_logger().log(logging.DEBUG, "Flushing buffer")
+        logger.get_logger().debug("Flushing buffer")
         del self.udp_buffer
         self.last_remote_frame = None
         self.udp_buffer = UDPBuffer(self.video_semaphore)
