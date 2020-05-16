@@ -1,4 +1,5 @@
 import logging
+import sys
 
 LEVELS = {'debug': logging.DEBUG,
           'info': logging.INFO,
@@ -16,7 +17,7 @@ def set_logger(args):
     """
     level = LEVELS.get(args.log_level, logging.NOTSET)
     str_format = '%(asctime)s [%(levelname)s] - %(message)s'
-    logging.basicConfig(level=level, format=str_format)
+    logging.basicConfig(level=level, format=str_format, stream=sys.stdout)
     return logging.getLogger(__name__)
 
 
