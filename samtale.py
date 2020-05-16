@@ -19,7 +19,7 @@ from configuration import Configuration, ConfigurationStatus
 from discovery_server import list_users
 from udp_helper import UDPBuffer, udp_datagram_from_msg, UDPDatagram, BufferQuality
 from user import CurrentUser
-from logger import get_logger
+from logger import get_logger, set_logger
 
 MAX_DATAGRAM_SIZE = 65_507
 
@@ -523,7 +523,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    log = logger.set_logger(args)
-    vc = VideoClient()
-    vc.start()
+    set_logger(args)
+    VideoClient().start()
     _exit(0)
