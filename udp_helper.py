@@ -87,7 +87,7 @@ class UDPBuffer:
         self._buffer = []
         self.__last_seq_number = 0
         self.__mutex = Lock()
-        self._buffer_quality = BufferQuality.SUPER_LOW
+        self._buffer_quality = BufferQuality.MEDIUM
         self.__num_holes = 0  # Number of missing packages in the buffer
         self.__packages_lost = 0
         self.__avg_delay = 0  # Measured in ms
