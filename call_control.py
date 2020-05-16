@@ -309,7 +309,7 @@ class CallControl:
                 accept = self.video_client.incoming_call(incoming_user.nick, incoming_user.ip)
                 self.call_lock.acquire()
                 if accept:
-                    get_logger().info(logging.INFO, f"We accepted a call with {incoming_user.nick}")
+                    get_logger().log(logging.INFO, f"We accepted a call with {incoming_user.nick}")
                     answer = f"CALL_ACCEPTED {CurrentUser().nick} {CurrentUser().udp_port}".encode()
                     connection.send(answer)
                     self._in_call = True
@@ -319,7 +319,7 @@ class CallControl:
                     self.call_thread = Thread(target=self.call_daemon, daemon=True)
                     self.call_thread.start()
                 else:
-                    get_logger().info(logging.INFO, f"We rejected a call with {incoming_user.nick}")
+                    get_logger().log(logging.INFO, f"We rejected a call with {incoming_user.nick}")
                     connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
                 self.call_lock.release()
             except (ValueError, IndexError):
