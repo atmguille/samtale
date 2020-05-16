@@ -77,7 +77,6 @@ class UDPBuffer:
     U = 0.01
     BUFFER_MAX = 5
     CONSUME_SPEEDUP = 1.5
-    MAXIMUM_DELAY = 400  # (measured in ms)
 
     def __init__(self, display_video_semaphore: Semaphore):
         """
@@ -124,7 +123,7 @@ class UDPBuffer:
 
         with self.__mutex:
             # If datagram should have already been consumed, discard it
-            if datagram.seq_number < self.__last_seq_number or datagram.delay_ts >= UDPBuffer.MAXIMUM_DELAY:
+            if datagram.seq_number < self.__last_seq_number:
                 return False
 
             # Update time_between_frames
