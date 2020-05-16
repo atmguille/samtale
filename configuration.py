@@ -45,10 +45,7 @@ class Configuration:
                 try:
                     register()
                     self.status = ConfigurationStatus.LOADED
-                    get_logger().log(logging.INFO, f"Successfully signed in as {nickname}")
                 except RegisterFailed:
-                    get_logger().log(logging.WARNING, f"Couldn't sign in as {nickname}. "
-                                                      f"The password is probably not correct")
                     self.status = ConfigurationStatus.WRONG_PASSWORD
 
             except KeyError as e:
@@ -83,7 +80,6 @@ class Configuration:
             self.status = ConfigurationStatus.WRONG_PASSWORD
             return "Wrong Password", f"The provided password for {nickname} was not correct"
 
-        get_logger().log(logging.INFO, f"Successfully signed in as {nickname}")
         self.status = ConfigurationStatus.LOADED
         if persistent:
             self.config["Configuration"] = {

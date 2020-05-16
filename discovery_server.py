@@ -1,5 +1,8 @@
+import logging
 import socket
 from typing import List
+
+from logger import get_logger
 from user import User, CurrentUser
 
 BUFFER_SIZE = 1024
@@ -32,6 +35,7 @@ def _send(message: bytes, end_char: chr = None) -> str:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
         connection.connect((socket.gethostbyname(server_hostname), server_port))
         connection.send(message)
+        get_logger().log(logging.DEBUG, f"Sent {message} to discovery server")
         response = connection.recv(BUFFER_SIZE)
         return_string += response.decode()
         if end_char:
@@ -44,6 +48,7 @@ def _send(message: bytes, end_char: chr = None) -> str:
                     pass
         connection.send("QUIT".encode())
 
+    get_logger().log(logging.DEBUG, f"Received {return_string} from discovery server")
     return return_string
 
 
@@ -56,7 +61,9 @@ def register():
     string_to_send = f"REGISTER {user.nick} {user.ip} {user.tcp_port} {user.password} {'#'.join(user.protocols)}"
     response = _send(string_to_send.encode()).split()
     if response[0] == "NOK":
+        get_logger().log(logging.WARNING, f"Error registering user {user.nick}: {response}")
         raise RegisterFailed
+    get_logger().log(logging.INFO, f"Successfully registered user {user.nick}")
 
 
 def get_user(nick: str) -> User:
@@ -69,11 +76,15 @@ def get_user(nick: str) -> User:
     string_to_send = f"QUERY {nick}"
     response = _send(string_to_send.encode()).split()
     if response[0] == "NOK":
+        get_logger().log(logging.WARNING, f"Error getting username: {response}")
         raise UserUnknown(nick)
     else:
         try:
-            return User(nick, ip=response[3], tcp_port=int(response[4]), protocols=response[5])
+            user = User(nick, ip=response[3], tcp_port=int(response[4]), protocols=response[5])
+            get_logger().log(logging.INFO, f"Successfully fetched user {nick}")
+            return user
         except Exception:
+            get_logger().log(logging.WARNING, f"Error getting username: {response}")
             raise BadUser(nick)
 
 
@@ -98,7 +109,8 @@ def list_users() -> List[User]:
             # Protocols is not answered by the server, ts instead. Since we do not use the info, we set it to V0
             users.append(User(nick=user[0], ip=user[1], tcp_port=int(float(user[2])), protocols="V0"))
         except Exception as e:
-            print(f"Error parsing user: {e}")
+            get_logger().log(logging.WARNING, f"Error parsing user: {e}")
             pass
 
+    get_logger().log(logging.INFO, f"Successfully parsed {len(users)} users out of {n_users}")
     return users
