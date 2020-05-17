@@ -96,6 +96,7 @@ class CallControl:
         :param nickname
         """
         # Fetch user from server
+        get_logger().info(f"Calling {nickname}...")
         try:
             user = get_user(nickname)
         except (UserUnknown, BadUser) as e:
