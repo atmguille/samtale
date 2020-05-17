@@ -32,7 +32,7 @@ class UDPDatagram:
         """
         self.received_ts = time()
         self.delay_ts = (self.received_ts - self.sent_ts) * 1000
-        if self.delay_ts:
+        if self.delay_ts < 0:
             get_logger().warning(f"Negative delay of {self.delay_ts}. The clocks are probably not synced.")
 
     def __str__(self):
