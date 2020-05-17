@@ -141,6 +141,7 @@ class CallControl:
             with self.call_lock:
                 self._waiting = False
 
+            connection.close()
             self.video_client.display_connect()
             return
 
@@ -314,7 +315,7 @@ class CallControl:
                 if accept:
                     get_logger().info(f"We accepted a call with {incoming_user.nick}")
                     answer = f"CALL_ACCEPTED {CurrentUser().nick} {CurrentUser().udp_port}".encode()
-                    connection.send(answer)
+                    print(connection.send(answer))
                     self._in_call = True
                     self.video_client.display_in_call(incoming_user.nick)
                     self.dst_user = incoming_user
@@ -336,7 +337,6 @@ class CallControl:
         Checks if the call must be held, resumed, ended of if the connection is congested, notifying the user in any case
         """
         last_congested = 0
-        stablished_connection = False
 
         while True:
             if self.protocol != "V0":  # Check congested condition only if using protocol that requires it
@@ -354,8 +354,6 @@ class CallControl:
                 response = response.decode().split()
                 # If socket is closed, no exception is thrown but response is empty
                 if not response:
-                    if not stablished_connection:
-                        get_logger().info(f"The call with {self.dst_user.nick} has timed out")
                     self._call_end()
                     break
                 stablished_connection = True
