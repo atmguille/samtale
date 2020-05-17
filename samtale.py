@@ -123,10 +123,11 @@ class VideoClient:
         self.gui.setStretch("both")
         self.gui.setSticky("new")
         self.gui.addAutoEntry(VideoClient.USER_SELECTOR_WIDGET, nicks, row=1, column=0)
-        self.gui.addStatusbar(fields=3)
+        self.gui.addStatusbar(fields=4)
         self.gui.setStatusbar("Call Quality: N/A", 0)
         self.gui.setStatusbar("Packages lost: N/A", 1)
-        self.gui.setStatusbar("Delay avg (ms): N/A", 2)
+        self.gui.setStatusbar("Delay avg: N/A", 2)
+        self.gui.setStatusbar("Jitter: N/A", 3)
 
         # Initialize threads
         start_control_thread = self.configuration.status == ConfigurationStatus.LOADED
@@ -289,7 +290,7 @@ class VideoClient:
                 local_frame = self.last_local_frame
             # Fetch remote frame
             remote_frame = self.udp_buffer.consume()
-            quality, packages_lost, delay_avg = self.udp_buffer.get_statistics()
+            quality, packages_lost, delay_avg, jitter = self.udp_buffer.get_statistics()
             # If we are using V0, decrease our video quality (assuming that the connection is symmetric)
             # If V1 (or higher) is used, we will send a CALL_CONGESTED to the other end
             if self.call_control.in_call() and quality < BufferQuality.MEDIUM:
@@ -320,13 +321,15 @@ class VideoClient:
 
                 self.gui.setStatusbar(f"Call Quality: {quality.name}", 0)
                 self.gui.setStatusbar(f"Packages lost: {packages_lost}", 1)
-                self.gui.setStatusbar(f"Delay avg (ms): {round(delay_avg, ndigits=2)}", 2)
+                self.gui.setStatusbar(f"Delay avg: {round(delay_avg, ndigits=2)} ms", 2)
+                self.gui.setStatusbar(f"Jitter: {jitter}", 3)
 
                 self.display_frame(remote_frame)
             elif not remote_frame:
                 self.gui.setStatusbar("Call Quality: N/A", 0)
                 self.gui.setStatusbar("Packages lost: N/A", 1)
-                self.gui.setStatusbar("Delay avg (ms): N/A", 2)
+                self.gui.setStatusbar("Delay avg: N/A", 2)
+                self.gui.setStatusbar("Jitter: N/A", 3)
                 self.display_frame(local_frame)
 
     def buttons_callback(self, name: str):

@@ -94,6 +94,7 @@ class UDPBuffer:
         self.__num_holes = 0  # Number of missing packages in the buffer
         self.__packages_lost = 0
         self.__avg_delay = 0  # Measured in ms
+        self.__jitter = 0
         self.__initial_frames = 0
         self.__time_between_frames = 0
         self.__last_consumed = None
@@ -111,11 +112,11 @@ class UDPBuffer:
             self.display_video_semaphore.release()
             sleep(self.__time_between_frames)
 
-    def get_statistics(self) -> Tuple[BufferQuality, int, float]:
+    def get_statistics(self) -> Tuple[BufferQuality, int, float, float]:
         """
-        :return: buffer quality, packages lost, average delay
+        :return: buffer quality, packages lost, average delay, jitter
         """
-        return self._buffer_quality, self.__packages_lost, self.__avg_delay
+        return self._buffer_quality, self.__packages_lost, self.__avg_delay, self.__jitter
 
     def insert(self, datagram: UDPDatagram) -> bool:
         """
@@ -170,6 +171,8 @@ class UDPBuffer:
             # Some delays may be negative if clocks are not synchronized in both ends
             if datagram.delay_ts > 0:
                 self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
+
+            self.__jitter = (1 - UDPBuffer.U)*self.__jitter + UDPBuffer.U*abs(datagram.delay_ts - self.__avg_delay)
 
             # Recompute buffer_quality  # TODO: definitivo???
             score = 5 * self.__num_holes + 2 * self.__packages_lost/(datagram.seq_number+1)
