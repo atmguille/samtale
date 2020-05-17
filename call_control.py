@@ -319,7 +319,6 @@ class CallControl:
                     try:
                         connection.setblocking(False)
                         connection.recv(10)
-                        connection.setblocking(True)
                         # If we have reached here the connection has been closed in the other end
                         get_logger().info("The other end has closed the connection")
                         self.video_client.display_message("Connection timed out",
@@ -327,6 +326,7 @@ class CallControl:
                         self.call_lock.release()
                         return
                     except BlockingIOError:
+                        connection.setblocking(True)
                         pass
 
                     get_logger().info(f"We accepted a call with {incoming_user.nick}")
