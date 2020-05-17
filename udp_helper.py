@@ -32,8 +32,6 @@ class UDPDatagram:
         """
         self.received_ts = time()
         self.delay_ts = (self.received_ts - self.sent_ts) * 1000
-        if self.delay_ts:
-            get_logger().warning(f"Negative delay of {self.delay_ts}. The clocks are probably not synced.")
 
     def __str__(self):
         return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#" + self.data.decode()
@@ -166,10 +164,6 @@ class UDPBuffer:
 
                         self._buffer.insert(i + 1, datagram)
                         break
-
-            # Some delays may be negative if clocks are not synchronized in both ends
-            if datagram.delay_ts > 0:
-                self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
 
             # Recompute buffer_quality  # TODO: definitivo???
             score = 5 * self.__num_holes + 2 * self.__packages_lost/(datagram.seq_number+1)
