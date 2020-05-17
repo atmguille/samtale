@@ -322,7 +322,7 @@ class VideoClient:
                 self.gui.setStatusbar(f"Call Quality: {quality.name}", 0)
                 self.gui.setStatusbar(f"Packages lost: {packages_lost}", 1)
                 self.gui.setStatusbar(f"Delay avg: {round(delay_avg, ndigits=2)} ms", 2)
-                self.gui.setStatusbar(f"Jitter: {jitter}", 3)
+                self.gui.setStatusbar(f"Jitter: {round(jitter, ndigits=2)} ms", 3)
 
                 self.display_frame(remote_frame)
             elif not remote_frame:
