@@ -282,9 +282,13 @@ class CallControl:
                 self.call_lock.acquire()
                 if self._in_call or self._waiting:
                     self.call_lock.release()  # Release the lock asap
-                    connection.send("CALL_BUSY".encode())
-                    get_logger().info(f"{response[1]} called while in a call")
-                    self.video_client.display_message(f"{response[1]} called you", f"{response[1]} called you")
+                    if response[0] == "CALLING":
+                        connection.send("CALL_BUSY".encode())
+                        get_logger().info(f"{response[1]} called while in a call")
+                        self.video_client.display_message(f"{response[1]} called you", f"{response[1]} called you")
+                    else:
+                        get_logger().error(f"Received {response} while on a call. The other side is probably sending "
+                                           f"data using a new TCP connection instead of using the already created one")
                     continue
 
                 if response[0] != "CALLING":
