@@ -32,8 +32,6 @@ class UDPDatagram:
         """
         self.received_ts = time()
         self.delay_ts = (self.received_ts - self.sent_ts) * 1000
-        if self.delay_ts:
-            get_logger().warning(f"Negative delay of {self.delay_ts}. The clocks are probably not synced.")
 
     def __str__(self):
         return f"{self.seq_number}#{self.sent_ts}#{self.resolution}#{self.fps}#" + self.data.decode()
@@ -141,9 +139,7 @@ class UDPBuffer:
             if self.__initial_frames < UDPBuffer.MINIMUM_INITIAL_FRAMES:
                 self.__initial_frames += 1
                 if self.__initial_frames == 1:
-                    if datagram.delay_ts > 0:
-                        # TODO: logging
-                        self.__avg_delay = datagram.delay_ts
+                    self.__avg_delay = datagram.delay_ts
                 if self.__initial_frames == UDPBuffer.MINIMUM_INITIAL_FRAMES:
                     # If we are ready to start playing, start the waker thread
                     Thread(target=self.wake_displayer, daemon=True).start()
@@ -168,10 +164,7 @@ class UDPBuffer:
                         self._buffer.insert(i + 1, datagram)
                         break
 
-            # Some delays may be negative if clocks are not synchronized in both ends
-            if datagram.delay_ts > 0:
-                self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
-
+            self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
             self.__jitter = (1 - UDPBuffer.U)*self.__jitter + UDPBuffer.U*abs(datagram.delay_ts - self.__avg_delay)
 
             # Recompute buffer_quality  # TODO: definitivo???
