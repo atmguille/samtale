@@ -313,9 +313,23 @@ class CallControl:
                 accept = self.video_client.incoming_call(incoming_user.nick, incoming_user.ip)
                 self.call_lock.acquire()
                 if accept:
-                    get_logger().info(f"We accepted a call with {incoming_user.nick}")
                     answer = f"CALL_ACCEPTED {CurrentUser().nick} {CurrentUser().udp_port}".encode()
-                    print(connection.send(answer))
+                    connection.send(answer)
+                    # The following code will throw an exception if the connection is open
+                    try:
+                        connection.setblocking(False)
+                        connection.recv(10)
+                        connection.setblocking(True)
+                        # If we have reached here the connection has been closed in the other end
+                        get_logger().info("The other end has closed the connection")
+                        self.video_client.display_message("Connection timed out",
+                                                          f"{self.dst_user.nick} was tired of waiting for you to answer")
+                        self.call_lock.release()
+                        return
+                    except BlockingIOError:
+                        pass
+
+                    get_logger().info(f"We accepted a call with {incoming_user.nick}")
                     self._in_call = True
                     self.video_client.display_in_call(incoming_user.nick)
                     self.dst_user = incoming_user
