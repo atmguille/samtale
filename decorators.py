@@ -4,6 +4,10 @@ from timeit import default_timer
 
 
 def timeout(milliseconds: int):
+    """
+    :param milliseconds: maximum number of milliseconds the function can run
+    :return: a decorator whose effect is to limit the execution time of the function passed to it
+    """
     class _TimeoutException(Exception):
         pass
 
@@ -29,6 +33,10 @@ def timeout(milliseconds: int):
 
 
 def timer(function):
+    """
+    :param function: function to be decorated
+    :return: a function that will run the original function printing the time taken to run it (in milliseconds)
+    """
     def _timeit(*args, **kwargs):
         start = default_timer()
         return_value = function(*args, **kwargs)
@@ -41,6 +49,10 @@ def timer(function):
 
 
 def run_in_thread(function):
+    """
+    :param function: function to be decorated
+    :return: a function that will run the original function on a separate thread
+    """
     def _run_in_thread(*args, **kwargs):
         Thread(target=function, args=args, kwargs=kwargs).start()
         return
@@ -49,6 +61,11 @@ def run_in_thread(function):
 
 
 def notify_timeout(milliseconds: int):
+    """
+    :param milliseconds: maximum number of milliseconds the function should take
+    :return: a decorator whose effect is to inform if the execution time of the function passed to it reached the limit
+    of milliseconds milliseconds.
+    """
     def _timeout(function):
         def wrapper(*args, **kwargs):
             start = default_timer()

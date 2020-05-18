@@ -41,7 +41,12 @@ The GUI has the following widgets:
 Apart from these widgets, dialog messages will be displayed to inform the user of what is happening: if he wants to Accept or Deny a call, if the other user accepted/denied/ended the call, ...
 
 ## Execution
-Just run the following and enjoy!
 ```bash
 python samtale.py
+```
+
+The default logging level is WARNING. This can be changed as follows:
+
+```bash
+python samtale.py -log_level {debug, info, warning, error}
 ```

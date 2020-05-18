@@ -35,7 +35,8 @@ class User:
         :param udp_port: if not specified, initialized to None until it is updated
         """
         self.nick = nick
-        self.protocols = protocols.split("#")
+        # Avoid misunderstandings with users that log in with protocol in lower case
+        self.protocols = [protocol.upper() for protocol in protocols.split("#")]
         self.ip = ip if ip is not None else _get_public_ip()
         self.tcp_port = tcp_port
         self.udp_port = udp_port
@@ -62,8 +63,9 @@ class CurrentUser(User):
         :param protocols
         :param tcp_port
         :param password
+        :param udp_port
         :param ip: if not specified, own public (or private) IP will be set
-        :param udp_port: if not specified, initialized to None until it is updated
+        :param private_ip: if ip should be set to public or private
         """
         if ip is None:
             if private_ip:
