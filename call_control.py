@@ -135,13 +135,13 @@ class CallControl:
             response = connection.recv(CallControl.BUFFER_SIZE)
         except (socket.timeout, OSError, ConnectionError):
             # This exception only happened if the other user does not answer to our call
+            connection.close()
             get_logger().info(f"The user {user.nick} did not answer the call")
             self.video_client.display_message("Call not answered",
                                               f"The user {user.nick} did not answer the call")
             with self.call_lock:
                 self._waiting = False
 
-            connection.close()
             self.video_client.display_connect()
             return
 
