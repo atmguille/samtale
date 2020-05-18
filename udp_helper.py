@@ -167,7 +167,7 @@ class UDPBuffer:
             self.__avg_delay = (1 - UDPBuffer.U)*self.__avg_delay + UDPBuffer.U*datagram.delay_ts
             self.__jitter = (1 - UDPBuffer.U)*self.__jitter + UDPBuffer.U*abs(datagram.delay_ts - self.__avg_delay)
 
-            # Recompute buffer_quality  # TODO: definitivo???
+            # Recompute buffer_quality
             score = 5 * self.__num_holes + 2 * self.__packages_lost/(datagram.seq_number+1)
             if 20 < self.__jitter < 50:
                 score += 10
