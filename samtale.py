@@ -92,6 +92,7 @@ class VideoClient:
         self.video_current_frame = 0
 
         self.capture = cv2.VideoCapture(0)
+        self.no_camera = cv2.imread(VideoClient.NO_CAMERA_IMAGE)
         if not self.capture.isOpened():
             get_logger().info("No camera mode enabled")
             self.capture_mode = CaptureMode.NO_CAMERA
@@ -233,11 +234,11 @@ class VideoClient:
         """
         with self.capture_lock:
             if self.capture_mode == CaptureMode.NO_CAMERA:
-                frame = cv2.imread(VideoClient.NO_CAMERA_IMAGE)
+                frame = self.no_camera
             else:
                 success, frame = self.capture.read()
                 if not success:
-                    frame = cv2.imread(VideoClient.NO_CAMERA_IMAGE)
+                    frame = self.no_camera
                 else:
                     if self.capture_mode == CaptureMode.CAMERA:
                         # Flip the image so it has the natural orientation
