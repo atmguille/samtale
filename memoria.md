@@ -24,6 +24,24 @@ En este fichero se implementa la clase Configuration. Realmente sólo debería h
 
 Además, dispone de un método `load` para cargar la configuración durante la ejecución del programa y un método `delete` para borrar el fichero de configuración.
 
+### Logger
+
+En este fichero tenemos dos funciones:
+
+- **set_logger**: establece el formato de los mensajes de logging, estableciendo como salida *stdout* en vez del valor por defecto *stderr*.
+- **get_logger:** obtiene el logger del proyecto
+
+En el resto del ficheros imprimimos los mensajes de log de la siguiente manera:
+
+```python
+get_logger().debug("Este es un mensaje muy poco imporante")
+get_logger().info("Este es un mensaje poco importante")
+get_logger().warning("Este es un mensaje bastante importante")
+get_logger().error("Este es un mensaje muy importante")
+```
+
+
+
 ### User
 
 Contiene las clases User y CurrentUser. La segunda hereda de la primera y añade una contraseña. Además, cabe destacar el método de User que calcula el protocolo común entre él y el CurrentUser, muy útil para determinar cual debe ser usado en una llamada. Además, la clase CurrentUser es un `Singleton`, pues la aplicación sólo puede ser usada por un usuario a la vez. Conseguimos implementar este patrón de diseño usando el decorador mencionado unas líneas más arriba. Por otro lado, contiene funciones para determinar la IP pública y privada del usuario.
