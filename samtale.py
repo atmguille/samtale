@@ -532,7 +532,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Samtale')
 
     parser.add_argument('-log_level', action='store', nargs='?', default='info',
-                        choices=['debug', 'info', 'warning', 'error', 'critical'], required=False,
+                        choices=['debug', 'info', 'warning', 'error'], required=False,
                         help='Indicate logging level')
 
     args = parser.parse_args()
