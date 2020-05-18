@@ -45,7 +45,7 @@ Apart from these widgets, dialog messages will be displayed to inform the user o
 python samtale.py
 ```
 
-The default logging level is WARNING. This can be changed as follows:
+The default logging level is INFO. This can be changed as follows:
 
 ```bash
 python samtale.py -log_level {debug, info, warning, error}
