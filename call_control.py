@@ -213,15 +213,16 @@ class CallControl:
         """
         Reset attributes related with a call when it is over
         """
-        self._in_call = False
-        self._waiting = False
-        self.we_on_hold = False
-        self.they_on_hold = False
-        self.sequence_number = 0
-        self.protocol = None
-        self.video_client.flush_buffer()
-        self.call_socket.close()
-        self.video_client.display_connect()
+        with self.call_lock:
+            self._in_call = False
+            self._waiting = False
+            self.we_on_hold = False
+            self.they_on_hold = False
+            self.sequence_number = 0
+            self.protocol = None
+            self.video_client.flush_buffer()
+            self.call_socket.close()
+            self.video_client.display_connect()
 
     def call_end(self):
         """
@@ -291,6 +292,7 @@ class CallControl:
                     else:
                         get_logger().error(f"Received {response} while on a call. The other side is probably sending "
                                            f"data using a new TCP connection instead of using the already created one")
+                    connection.close()
                     continue
 
                 if response[0] != "CALLING":
@@ -324,10 +326,10 @@ class CallControl:
                         self.video_client.display_message("Connection timed out",
                                                           f"{self.dst_user.nick} was tired of waiting for you to answer")
                         self.call_lock.release()
-                        return
+                        connection.close()
+                        continue
                     except BlockingIOError:
                         connection.setblocking(True)
-                        pass
 
                     get_logger().info(f"We accepted a call with {incoming_user.nick}")
                     self._in_call = True
@@ -343,6 +345,7 @@ class CallControl:
             except (ValueError, IndexError):
                 get_logger().error(f"Error parsing control message")
                 connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
+                connection.close()
                 self.call_lock.release()
 
     def call_daemon(self):
@@ -370,7 +373,6 @@ class CallControl:
                 if not response:
                     self._call_end()
                     break
-                stablished_connection = True
                 if response[0] == "CALL_HOLD":
                     get_logger().info(f"{self.dst_user.nick} paused the call")
                     self.they_on_hold = True
