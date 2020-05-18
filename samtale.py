@@ -531,7 +531,7 @@ class VideoClient:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Samtale')
 
-    parser.add_argument('-log_level', action='store', nargs='?', default='debug',
+    parser.add_argument('-log_level', action='store', nargs='?', default='info',
                         choices=['debug', 'info', 'warning', 'error', 'critical'], required=False,
                         help='Indicate logging level')
 
