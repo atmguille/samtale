@@ -74,8 +74,7 @@ class Configuration:
         try:
             register()
         except RegisterFailed:
-            get_logger().warning(f"Couldn't sign in as {nickname}. "
-                                              f"The password is probably not correct")
+            get_logger().warning(f"Couldn't sign in as {nickname}. The password is probably not correct")
             self.status = ConfigurationStatus.WRONG_PASSWORD
             return "Wrong Password", f"The provided password for {nickname} was not correct"
 
