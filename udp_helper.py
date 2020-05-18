@@ -169,9 +169,9 @@ class UDPBuffer:
 
             # Recompute buffer_quality  # TODO: definitivo???
             score = 5 * self.__num_holes + 2 * self.__packages_lost/(datagram.seq_number+1)
-            if 150 < self.__avg_delay < 300:
+            if 20 < self.__jitter < 50:
                 score += 10
-            elif self.__avg_delay > 300:
+            elif self.__jitter > 50:
                 score += 30
 
             if score < 5:
