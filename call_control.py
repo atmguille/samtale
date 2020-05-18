@@ -322,10 +322,10 @@ class CallControl:
                         connection.setblocking(False)
                         connection.recv(10)
                         # If we have reached here the connection has been closed in the other end
+                        self.call_lock.release()
                         get_logger().info("The other end has closed the connection")
                         self.video_client.display_message("Connection timed out",
-                                                          f"{self.dst_user.nick} was tired of waiting for you to answer")
-                        self.call_lock.release()
+                                                          f"{incoming_user.nick} was tired of waiting for you to answer")
                         connection.close()
                         continue
                     except BlockingIOError:
@@ -341,6 +341,7 @@ class CallControl:
                 else:
                     get_logger().info(f"We rejected a call with {incoming_user.nick}")
                     connection.send(f"CALL_DENIED {CurrentUser().nick}".encode())
+                    connection.close()
                 self.call_lock.release()
             except (ValueError, IndexError):
                 get_logger().error(f"Error parsing control message")
