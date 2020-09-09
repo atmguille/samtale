@@ -1,5 +1,10 @@
 # Samtale
 
+## Project description
+This project has been developed as part of the subject Communication Networks II, along with [Daniel Gallo Fernández](https://github.com/daniel-gallo).
+
+The main purpose of the project was to develop a tool, similar to Skype, Discord, ..., that allows clients to lively share video (from their webcam, a file, ...) among each other. To do that, two connections are opened: a connection through TCP, where users exchange control commands, and a connection through UDP, where the video is sent. A protocol to organize, (discard, ...) UDP packets before reproduction was also implemented, so as to improve the quality and the sense of the video that is being transmitted.
+
 ## Installation
 Using a virtual environment is highly recommended. To do so:
 - Install `virtualenv` if you do not have it already by running:
